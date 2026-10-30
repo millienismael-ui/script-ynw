@@ -15,8 +15,8 @@ local Config = {
 	FOV = 180,
 	Smoothness = 6,
 	ThroughWalls = true,
-	Tracers = true, -- Activer/désactiver les tracers rouges
-	ESPBoxes = true, -- Activer/désactiver l'ESP vert
+	Tracers = true,
+	ESPBoxes = true,
 	MenuKey = Enum.KeyCode.RightShift
 }
 
@@ -25,10 +25,10 @@ local isRightMouseDown = false
 local lockedTarget = nil
 local espCache = {}
 
--- Création d'un son de clic futuriste (ID : 140910211)
+-- Création du son de clic avec un volume augmenté (ID : 140910211)
 local ClickSound = Instance.new("Sound")
 ClickSound.SoundId = "rbxassetid://140910211"
-ClickSound.Volume = 0.5
+ClickSound.Volume = 1.5 -- Volume augmenté
 ClickSound.Parent = SoundService
 
 -- Création de l'interface graphique (GUI)
@@ -41,8 +41,8 @@ ScreenGui.Parent = CoreGui
 -- Fenêtre principale (Style Futuriste / Cyberpunk sombre)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 320, 0, 420)
-MainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
+MainFrame.Size = UDim2.new(0, 340, 0, 440)
+MainFrame.Position = UDim2.new(0.5, -170, 0.5, -220)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
@@ -131,14 +131,27 @@ ContentContainer.Size = UDim2.new(1, -20, 1, -65)
 ContentContainer.Position = UDim2.new(0, 10, 0, 55)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.BorderSizePixel = 0
-ContentContainer.CanvasSize = UDim2.new(0, 0, 0, 350)
+ContentContainer.CanvasSize = UDim2.new(0, 0, 0, 400)
 ContentContainer.ScrollBarThickness = 3
 ContentContainer.Parent = MainFrame
 
 local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 14)
+UIListLayout.Padding = UDim.new(0, 10)
 UIListLayout.Parent = ContentContainer
+
+-- Fonction pour créer des titres de sections (Catégories)
+local function createCategoryHeader(titleText)
+	local header = Instance.new("TextLabel")
+	header.Size = UDim2.new(1, 0, 0, 28)
+	header.BackgroundTransparency = 1
+	header.Font = Enum.Font.GothamBold
+	header.Text = titleText
+	header.TextColor3 = Color3.fromRGB(0, 229, 255)
+	header.TextSize = 13
+	header.TextXAlignment = Enum.TextXAlignment.Left
+	header.Parent = ContentContainer
+end
 
 -- Fonction utilitaire pour créer des toggles
 local function createToggle(name, defaultState, callback)
@@ -185,12 +198,16 @@ local function createToggle(name, defaultState, callback)
 	container.Parent = ContentContainer
 end
 
--- Création des réglages dans l'UI
+-- --- CATÉGORIE 1 : AIMBOT ---
+createCategoryHeader("--- AIMBOT ---")
 createToggle("Activer le Script", Config.Enabled, function(state) Config.Enabled = state end)
 createToggle("Aide à la Visée (Aim Lock)", Config.AimAssist, function(state) Config.AimAssist = state end)
 createToggle("Traverser les Murs", Config.ThroughWalls, function(state) Config.ThroughWalls = state end)
-createToggle("Tracers Rouges", Config.Tracers, function(state) Config.Tracers = state end)
+
+-- --- CATÉGORIE 2 : VISUAL ---
+createCategoryHeader("--- VISUAL ---")
 createToggle("ESP Boîte Vert", Config.ESPBoxes, function(state) Config.ESPBoxes = state end)
+createToggle("Tracers Rouges", Config.Tracers, function(state) Config.Tracers = state end)
 
 -- Cercle FOV visuel
 local FOVCircle = Drawing.new("Circle")
@@ -333,4 +350,30 @@ RunService.RenderStepped:Connect(function()
 						esp.Tracer.To = Vector2.new(rootScreenPos.X, rootScreenPos.Y)
 						esp.Tracer.Visible = true
 					else
-						esp.Tracer.Visible =
+						esp.Tracer.Visible = false
+					end
+				else
+					esp.Box.Visible = false
+					esp.Tracer.Visible = false
+				end
+			else
+				esp.Box.Visible = false
+				esp.Tracer.Visible = false
+			end
+		end
+	end
+
+	-- Logique de l'Aim Lock (Clic droit)
+	if Config.Enabled and Config.AimAssist and isRightMouseDown then
+		if not lockedTarget or not lockedTarget.Parent or lockedTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
+			lockedTarget = getClosestTarget()
+		end
+
+		if lockedTarget then
+			local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTarget.Position)
+			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 1 / Config.Smoothness)
+		end
+	else
+		lockedTarget = nil
+	end
+end)
