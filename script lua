@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
+local SoundService = game:GetService("SoundService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -12,8 +13,8 @@ local Config = {
 	Enabled = true,
 	AimAssist = true,
 	FOV = 180,
-	Smoothness = 6, -- Plus la valeur est élevée, plus le mouvement est fluide/lent
-	ThroughWalls = true, -- Permet de cibler à travers les murs
+	Smoothness = 6,
+	ThroughWalls = true,
 	MenuKey = Enum.KeyCode.RightShift
 }
 
@@ -21,59 +22,72 @@ local Config = {
 local isRightMouseDown = false
 local lockedTarget = nil
 
+-- Création d'un son de clic futuriste (ID : 140910211)
+local ClickSound = Instance.new("Sound")
+ClickSound.SoundId = "rbxassetid://140910211"
+ClickSound.Volume = 0.5
+ClickSound.Parent = SoundService
+
 -- Création de l'interface graphique (GUI)
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "PrivateTestUI"
+ScreenGui.Name = "YnwPrivateUI"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.DisplayOrder = 999999 -- Toujours au premier plan
+ScreenGui.DisplayOrder = 999999
 ScreenGui.Parent = CoreGui
 
--- Fenêtre principale
+-- Fenêtre principale (Style Futuriste / Cyberpunk sombre)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 320, 0, 380)
 MainFrame.Position = UDim2.new(0.5, -160, 0.5, -190)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = true
 MainFrame.Parent = ScreenGui
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 8)
-UICorner.Parent = MainFrame
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
 
--- Barre supérieure (unique moyen de déplacer la fenêtre)
+-- Bordure lumineuse futuriste (Stroke)
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Color3.fromRGB(0, 229, 255) -- Cyan néon
+MainStroke.Thickness = 1.5
+MainStroke.Transparency = 0.3
+MainStroke.Parent = MainFrame
+
+-- Barre supérieure
 local TopBar = Instance.new("Frame")
 TopBar.Name = "TopBar"
-TopBar.Size = UDim2.new(1, 0, 0, 40)
-TopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+TopBar.Size = UDim2.new(1, 0, 0, 45)
+TopBar.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
 TopBar.BorderSizePixel = 0
 TopBar.Parent = MainFrame
 
 local TopBarCorner = Instance.new("UICorner")
-TopBarCorner.CornerRadius = UDim.new(0, 8)
+TopBarCorner.CornerRadius = UDim.new(0, 10)
 TopBarCorner.Parent = TopBar
 
--- Correction pour garder les coins arrondis uniquement en haut
 local BottomCover = Instance.new("Frame")
 BottomCover.Size = UDim2.new(1, 0, 0, 10)
 BottomCover.Position = UDim2.new(0, 0, 1, -10)
-BottomCover.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+BottomCover.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
 BottomCover.BorderSizePixel = 0
 BottomCover.Parent = TopBar
 
+-- Titre "Ynw" + style futuriste
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -20, 1, 0)
-TitleLabel.Position = UDim2.new(0, 10, 0, 0)
+TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.Text = "Panel de Test - Privé"
-TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
-TitleLabel.TextSize = 14
+TitleLabel.Font = Enum.Font.Code -- Police au rendu technique/futuriste
+TitleLabel.Text = "⚡ YNW // PANEL"
+TitleLabel.TextColor3 = Color3.fromRGB(0, 229, 255)
+TitleLabel.TextSize = 16
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TopBar
 
--- Logique de déplacement de la fenêtre (uniquement via la TopBar)
+-- Logique de déplacement (uniquement via la TopBar)
 local dragging, dragInput, dragStart, startPos
 
 TopBar.InputBegan:Connect(function(input)
@@ -110,58 +124,68 @@ end)
 
 -- Conteneur des options
 local ContentContainer = Instance.new("ScrollingFrame")
-ContentContainer.Size = UDim2.new(1, -20, 1, -60)
-ContentContainer.Position = UDim2.new(0, 10, 0, 50)
+ContentContainer.Size = UDim2.new(1, -20, 1, -65)
+ContentContainer.Position = UDim2.new(0, 10, 0, 55)
 ContentContainer.BackgroundTransparency = 1
 ContentContainer.BorderSizePixel = 0
 ContentContainer.CanvasSize = UDim2.new(0, 0, 0, 300)
-ContentContainer.ScrollBarThickness = 4
+ContentContainer.ScrollBarThickness = 3
 ContentContainer.Parent = MainFrame
 
 local UIListLayout = Instance.new("UIListLayout")
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 12)
+UIListLayout.Padding = UDim.new(0, 14)
 UIListLayout.Parent = ContentContainer
 
--- Fonction utilitaire pour créer des boutons/toggle stylisés
+-- Fonction utilitaire pour créer des boutons bascules (toggles) futuristes avec UICorner et son de clic
 local function createToggle(name, defaultState, callback)
 	local container = Instance.new("Frame")
-	container.Size = UDim2.new(1, 0, 0, 35)
+	container.Size = UDim2.new(1, 0, 0, 36)
 	container.BackgroundTransparency = 1
 	
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(0.7, 0, 1, 0)
+	label.Size = UDim2.new(0.68, 0, 1, 0)
 	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamMedium
+	label.Font = Enum.Font.Gotham
 	label.Text = name
-	label.TextColor3 = Color3.fromRGB(200, 200, 200)
+	label.TextColor3 = Color3.fromRGB(210, 210, 230)
 	label.TextSize = 13
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = container
 	
 	local button = Instance.new("TextButton")
-	button.Size = UDim2.new(0, 50, 0, 24)
-	button.Position = UDim2.new(1, -50, 0.5, -12)
-	button.BackgroundColor3 = defaultState and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(60, 60, 70)
+	button.Size = UDim2.new(0, 56, 0, 26)
+	button.Position = UDim2.new(1, -56, 0.5, -13)
+	button.BackgroundColor3 = defaultState and Color3.fromRGB(0, 229, 255) or Color3.fromRGB(35, 35, 50)
 	button.AutoButtonColor = false
 	button.Text = ""
 	button.Parent = container
 	
+	-- Bouton avec coins arrondis (UICorner)
 	local btnCorner = Instance.new("UICorner")
-	btnCorner.CornerRadius = UDim.new(1, 0)
+	btnCorner.CornerRadius = UDim.new(0, 6)
 	btnCorner.Parent = button
+
+	-- Contour néon discret pour les boutons
+	local btnStroke = Instance.new("UIStroke")
+	btnStroke.Color = defaultState and Color3.fromRGB(150, 245, 255) or Color3.fromRGB(60, 60, 85)
+	btnStroke.Transparency = 0.2
+	btnStroke.Parent = button
 	
 	local state = defaultState
 	button.MouseButton1Click:Connect(function()
 		state = not state
-		button.BackgroundColor3 = state and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(60, 60, 70)
+		ClickSound:Play() -- Lecture du son de clic demandé (140910211)
+		
+		button.BackgroundColor3 = state and Color3.fromRGB(0, 229, 255) or Color3.fromRGB(35, 35, 50)
+		btnStroke.Color = state and Color3.fromRGB(150, 245, 255) or Color3.fromRGB(60, 60, 85)
 		callback(state)
 	end)
 	
 	container.Parent = ContentContainer
 end
 
--- Création des éléments de l'UI
+-- Création des éléments de l'UI avec les nouveaux styles
 createToggle("Activer le Script", Config.Enabled, function(state)
 	Config.Enabled = state
 end)
@@ -170,21 +194,21 @@ createToggle("Aide à la Visée (Aim Lock)", Config.AimAssist, function(state)
 	Config.AimAssist = state
 end)
 
-createToggle("Traverser les Murs (Wall Check off)", Config.ThroughWalls, function(state)
+createToggle("Traverser les Murs", Config.ThroughWalls, function(state)
 	Config.ThroughWalls = state
 end)
 
--- Cercle FOV visuel à l'écran
+-- Cercle FOV visuel à l'écran (style néon cyan)
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = true
-FOVCircle.Thickness = 1
+FOVCircle.Thickness = 1.2
 FOVCircle.NumSides = 64
 FOVCircle.Radius = Config.FOV
 FOVCircle.Filled = false
-FOVCircle.Color = Color3.fromRGB(255, 255, 255)
-FOVCircle.Transparency = 0.7
+FOVCircle.Color = Color3.fromRGB(0, 229, 255)
+FOVCircle.Transparency = 0.6
 
--- Gestion du clic droit de la souris
+-- Gestion des entrées (Clic droit + Raccourci menu)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.UserInputType == Enum.UserInputType.MouseButton2 then
 		isRightMouseDown = true
@@ -200,11 +224,10 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- Fonction de recherche de la cible la plus proche (visant la tête / Head)
+-- Fonction de recherche de la cible (visant la tête / Head)
 local function getClosestTarget()
 	local closestPlayer = nil
 	local shortestDistance = Config.FOV
-
 	local mousePos = UserInputService:GetMouseLocation()
 
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -213,7 +236,6 @@ local function getClosestTarget()
 			local head = player.Character:FindFirstChild("Head")
 			
 			if humanoid and humanoid.Health > 0 and head then
-				-- Vérification optionnelle des murs (Raycast) si demandé désactivée
 				local isValid = true
 				if not Config.ThroughWalls then
 					local origin = Camera.CFrame.Position
@@ -247,7 +269,7 @@ local function getClosestTarget()
 	return closestPlayer
 end
 
--- Boucle principale de mise à jour (RenderStepped)
+-- Boucle de rendu principale
 RunService.RenderStepped:Connect(function()
 	local mousePos = UserInputService:GetMouseLocation()
 	FOVCircle.Position = mousePos
@@ -256,14 +278,12 @@ RunService.RenderStepped:Connect(function()
 
 	if not Config.Enabled then return end
 
-	-- Gestion du verrouillage par maintien du clic droit
 	if Config.AimAssist and isRightMouseDown then
 		if not lockedTarget or not lockedTarget.Parent or lockedTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
 			lockedTarget = getClosestTarget()
 		end
 
 		if lockedTarget then
-			-- Calcul du lissage de la caméra vers la tête de la cible
 			local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTarget.Position)
 			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 1 / Config.Smoothness)
 		end
