@@ -11,14 +11,15 @@ local Camera = workspace.CurrentCamera
 -- Paramètres configurables
 local Config = {
 	AimAssist = true,
-	FOV = 40,
+	FOV = 35, -- Réglable de 1 à 100
 	Smoothness = 6,
-	ThroughWalls = true,
+	ThroughWalls = true, -- Traverser les murs et balles traversantes
 	Tracers = true,
 	ESPBoxes = true,
 	Crosshair = true,
-	SelectedTargetPlayer = nil,
+	SelectedTargetPlayer = nil, -- Cible manuelle prioritaire
 	
+	-- Options Player
 	InfiniteJump = false,
 	Spin = false,
 	Fly = false,
@@ -51,7 +52,7 @@ ScreenGui.DisplayOrder = 999999
 local success, _ = pcall(function() ScreenGui.Parent = CoreGui end)
 if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- Crosshair
+-- Réticule central (Crosshair)
 local CrosshairH = Instance.new("Frame")
 CrosshairH.Size = UDim2.new(0, 12, 0, 2)
 CrosshairH.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -68,7 +69,7 @@ CrosshairV.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 CrosshairV.BorderSizePixel = 0
 CrosshairV.Parent = ScreenGui
 
--- Main Frame (Noir & Blanc)
+-- Fenêtre principale (Thème Noir & Blanc épuré)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 480, 0, 440)
@@ -87,7 +88,7 @@ MainStroke.Color = Color3.fromRGB(255, 255, 255)
 MainStroke.Thickness = 2.5
 MainStroke.Parent = MainFrame
 
--- TopBar
+-- Barre supérieure
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 42)
 TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -103,13 +104,13 @@ TitleLabel.Size = UDim2.new(1, -20, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "⚡ YNW // PANEL (UNIVERSAL)"
+TitleLabel.Text = "⚡ YNW // PANEL (PRIVÉ)"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 16
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TopBar
 
--- Déplacement
+-- Déplacement de la fenêtre
 local dragging, dragStart, startPos
 TopBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -147,6 +148,7 @@ local UICornerSide = Instance.new("UICorner")
 UICornerSide.CornerRadius = UDim.new(0, 12)
 UICornerSide.Parent = Sidebar
 
+-- Onglets
 local Containers = {}
 
 local function createTabContent(name)
@@ -211,6 +213,7 @@ createSidebarButton(visualTab, "VIS")
 createSidebarButton(playerTab, "PLY")
 aimbotTab.Visible = true
 
+-- Composants Toggles et Sliders
 local function createToggle(parent, name, defaultState, callback)
 	local container = Instance.new("Frame")
 	container.Size = UDim2.new(1, 0, 0, 32)
@@ -295,11 +298,87 @@ local function createSlider(parent, name, min, max, default, callback)
 	container.Parent = parent
 end
 
--- Options AIM
+-- Configuration AIM
 createToggle(aimbotTab, "Aim Lock (Visée)", Config.AimAssist, function(s) Config.AimAssist = s end)
-createToggle(aimbotTab, "Traverser les Murs", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
+createToggle(aimbotTab, "Traverser les Murs & Balles", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
 createSlider(aimbotTab, "Taille FOV", 1, 100, Config.FOV, function(v) Config.FOV = v end)
 createSlider(aimbotTab, "Smoothness (Vitesse)", 1, 20, Config.Smoothness, function(v) Config.Smoothness = v end)
+
+-- Liste des joueurs pour ciblage manuel
+local targetSelectorContainer = Instance.new("Frame")
+targetSelectorContainer.Size = UDim2.new(1, 0, 0, 130)
+targetSelectorContainer.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+targetSelectorContainer.BorderSizePixel = 0
+targetSelectorContainer.Parent = aimbotTab
+
+local tsCorner = Instance.new("UICorner")
+tsCorner.CornerRadius = UDim.new(0, 8)
+tsCorner.Parent = targetSelectorContainer
+
+local tsTitle = Instance.new("TextLabel")
+tsTitle.Size = UDim2.new(1, 0, 0, 25)
+tsTitle.Position = UDim2.new(0, 10, 0, 5)
+tsTitle.BackgroundTransparency = 1
+tsTitle.Font = Enum.Font.GothamBold
+tsTitle.Text = "Ciblage Manuel (Serveur)"
+tsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+tsTitle.TextSize = 12
+tsTitle.TextXAlignment = Enum.TextXAlignment.Left
+tsTitle.Parent = targetSelectorContainer
+
+local playerListScroll = Instance.new("ScrollingFrame")
+playerListScroll.Size = UDim2.new(1, -10, 1, -35)
+playerListScroll.Position = UDim2.new(0, 5, 0, 30)
+playerListScroll.BackgroundTransparency = 1
+playerListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+playerListScroll.ScrollBarThickness = 3
+playerListScroll.Parent = targetSelectorContainer
+
+local plLayout = Instance.new("UIListLayout")
+plLayout.SortOrder = Enum.SortOrder.LayoutOrder
+plLayout.Padding = UDim.new(0, 4)
+plLayout.Parent = playerListScroll
+
+local function updatePlayerListUI()
+	for _, child in ipairs(playerListScroll:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
+	end
+	
+	local count = 0
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			count = count + 1
+			local pBtn = Instance.new("TextButton")
+			pBtn.Size = UDim2.new(1, -10, 0, 24)
+			pBtn.BackgroundColor3 = (Config.SelectedTargetPlayer == player) and Color3.fromRGB(100, 100, 100) or Color3.fromRGB(30, 30, 30)
+			pBtn.Font = Enum.Font.Gotham
+			pBtn.Text = "  [ " .. player.Name .. " ]"
+			pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			pBtn.TextSize = 11
+			pBtn.TextXAlignment = Enum.TextXAlignment.Left
+			pBtn.Parent = playerListScroll
+			
+			local btnCorner = Instance.new("UICorner")
+			btnCorner.CornerRadius = UDim.new(0, 4)
+			btnCorner.Parent = pBtn
+			
+			pBtn.MouseButton1Click:Connect(function()
+				pcall(function() ClickSound:Play() end)
+				if Config.SelectedTargetPlayer == player then
+					Config.SelectedTargetPlayer = nil
+				else
+					Config.SelectedTargetPlayer = player
+				end
+				updatePlayerListUI()
+			end)
+		end
+	end
+	playerListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 28)
+end
+
+Players.PlayerAdded:Connect(updatePlayerListUI)
+Players.PlayerRemoving:Connect(updatePlayerListUI)
+updatePlayerListUI()
 
 -- Options VISUAL
 createToggle(visualTab, "ESP Boîte Vert", Config.ESPBoxes, function(s) Config.ESPBoxes = s end)
@@ -318,7 +397,7 @@ createSlider(playerTab, "Vitesse Fly", 1, 100, Config.FlySpeed, function(v) Conf
 createToggle(playerTab, "Activer WalkSpeed", Config.WalkSpeedEnabled, function(s) Config.WalkSpeedEnabled = s end)
 createSlider(playerTab, "Valeur WalkSpeed", 16, 150, Config.WalkSpeedValue, function(v) Config.WalkSpeedValue = v end)
 
--- Cercle FOV
+-- Cercle FOV Précis
 local FOVFrame = Instance.new("Frame")
 FOVFrame.BackgroundTransparency = 1
 FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -333,24 +412,18 @@ local FOVCorner = Instance.new("UICorner")
 FOVCorner.CornerRadius = UDim.new(1, 0)
 FOVCorner.Parent = FOVFrame
 
--- Helper : Trouver la partie principale/tête de n'importe quel personnage (Standard ou Custom Rivals)
+-- Helper universel pour trouver la tête ou la pièce principale
 local function getTargetPart(character)
 	if not character then return nil end
-	
-	-- Recherche des pièces habituelles
 	local priorityParts = {"Head", "HeadHitbox", "Hitbox", "HumanoidRootPart", "UpperTorso", "Torso"}
 	for _, name in ipairs(priorityParts) do
-		local part = character:FindFirstChild(name, true) -- Recherche récursive
+		local part = character:FindFirstChild(name, true)
 		if part and part:IsA("BasePart") then
 			return part
 		end
 	end
-	
-	-- Si aucune pièce spécifique n'est trouvée, prendre n'importe quelle BasePart
 	for _, child in ipairs(character:GetChildren()) do
-		if child:IsA("BasePart") then
-			return child
-		end
+		if child:IsA("BasePart") then return child end
 	end
 	return nil
 end
@@ -368,6 +441,12 @@ local function getTracer(player)
 	end
 	return tracerFrames[player]
 end
+
+Players.PlayerRemoving:Connect(function(player)
+	if tracerFrames[player] then tracerFrames[player]:Destroy() tracerFrames[player] = nil end
+	if highlights[player] then highlights[player]:Destroy() highlights[player] = nil end
+	if Config.SelectedTargetPlayer == player then Config.SelectedTargetPlayer = nil end
+end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.UserInputType == Enum.UserInputType.MouseButton2 then
@@ -388,10 +467,15 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- Recherche universelle de cible
+-- Recherche de cible ultra-précise et collée à un seul joueur
 local function getClosestTarget()
+	if Config.SelectedTargetPlayer and Config.SelectedTargetPlayer.Character then
+		local targetPart = getTargetPart(Config.SelectedTargetPlayer.Character)
+		if targetPart then return targetPart end
+	end
+
 	local closestPart = nil
-	local fovRadius = Config.FOV * 3
+	local fovRadius = Config.FOV * 3.5
 	local shortestDistance = fovRadius
 	local mousePos = UserInputService:GetMouseLocation()
 
@@ -400,14 +484,28 @@ local function getClosestTarget()
 			local targetPart = getTargetPart(player.Character)
 			
 			if targetPart then
-				local screenPoint, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-				if onScreen then
-					local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
-					local distance = (screenPos - mousePos).Magnitude
-					
-					if distance < shortestDistance then
-						shortestDistance = distance
-						closestPart = targetPart
+				local isValid = true
+				if not Config.ThroughWalls then
+					local char = LocalPlayer.Character
+					if char and char:FindFirstChild("HumanoidRootPart") then
+						local origin = Camera.CFrame.Position
+						local direction = (targetPart.Position - origin)
+						local raycastParams = RaycastParams.new()
+						raycastParams.FilterDescendantsInstances = {char, player.Character}
+						raycastParams.FilterType = RaycastType.Exclude
+						local result = workspace:Raycast(origin, direction, raycastParams)
+						if result then isValid = false end
+					end
+				end
+				
+				if isValid then
+					local screenPoint, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+					if onScreen then
+						local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - mousePos).Magnitude
+						if distance < shortestDistance then
+							shortestDistance = distance
+							closestPart = targetPart
+						end
 					end
 				end
 			end
@@ -416,10 +514,23 @@ local function getClosestTarget()
 	return closestPart
 end
 
--- Boucle de rendu universelle
+-- Hook pour les balles et tirs à travers les murs / portée infinie
+pcall(function()
+	if hookfunction and rawget(workspace, "Raycast") then
+		local oldRaycast
+		oldRaycast = hookfunction(workspace.Raycast, function(self, origin, direction, params)
+			if Config.ThroughWalls and lockedTarget and isRightMouseDown then
+				direction = (lockedTarget.Position - origin).Unit * 10000
+			end
+			return oldRaycast(self, origin, direction, params)
+		end)
+	end
+end)
+
+-- Boucle de rendu principale
 RunService.RenderStepped:Connect(function(dt)
 	local mousePos = UserInputService:GetMouseLocation()
-	local currentFOVSize = Config.FOV * 3
+	local currentFOVSize = Config.FOV * 3.5
 	
 	FOVFrame.Size = UDim2.new(0, currentFOVSize * 2, 0, currentFOVSize * 2)
 	FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
@@ -464,15 +575,15 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- ESP & Tracers universels
+	-- ESP & Tracers sécurisés (anti-bug de verrouillage de Highlight)
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
 			local pChar = player.Character
 			local pPart = getTargetPart(pChar)
 			
-			-- ESP Highlight (S'applique au modèle entier, fonctionne sur Rivals)
 			if Config.ESPBoxes and pChar then
-				if not highlights[player] then
+				if not highlights[player] or highlights[player].Parent ~= pChar then
+					if highlights[player] then highlights[player]:Destroy() end
 					local hl = Instance.new("Highlight")
 					hl.FillTransparency = 0.8
 					hl.OutlineColor = Color3.fromRGB(0, 255, 0)
@@ -481,17 +592,18 @@ RunService.RenderStepped:Connect(function(dt)
 					hl.Parent = pChar
 					highlights[player] = hl
 				else
-					highlights[player].Parent = pChar
 					highlights[player].Enabled = true
 				end
-			elseif highlights[player] then
-				highlights[player].Enabled = false
+			else
+				if highlights[player] then
+					highlights[player]:Destroy()
+					highlights[player] = nil
+				end
 			end
 			
-			-- Tracers
 			local tracer = getTracer(player)
 			if Config.Tracers and pChar and pPart then
-				local partScreenPos, onScreen = Camera:WorldToViewportPoint(pPart.Position)
+				local partScreenPos, onScreen = Camera:WorldToViewportPoint(pPart.Position - Vector3.new(0, 2, 0))
 				
 				if onScreen then
 					local bottomScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
@@ -512,7 +624,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- Aim Lock universel
+	-- Aim Lock strict (Reste bloqué sur une seule cible tant que le clic droit est maintenu)
 	if Config.AimAssist and isRightMouseDown then
 		if not lockedTarget or not lockedTarget.Parent then
 			lockedTarget = getClosestTarget()
