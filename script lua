@@ -13,12 +13,20 @@ local Config = {
 	Enabled = true,
 	AimAssist = true,
 	FOV = 150,
-	Smoothness = 6, -- Ajusté pour être parfaitement dynamique
-	ThroughWalls = true,
+	Smoothness = 6,
+	ThroughWalls = true, -- Traverser les murs activé par défaut
 	Tracers = true,
 	ESPBoxes = true,
 	Crosshair = true,
-	MenuKey = Enum.KeyCode.RightShift,
+	
+	-- Paramètres Player (Fly, Speed, etc.)
+	InfiniteJump = false,
+	Spin = false,
+	Fly = false,
+	FlySpeed = 50,
+	WalkSpeedEnabled = false,
+	WalkSpeedValue = 50,
+	
 	ToggleGuiKey = Enum.KeyCode.LeftControl
 }
 
@@ -27,6 +35,8 @@ local isRightMouseDown = false
 local lockedTarget = nil
 local highlights = {}
 local tracerFrames = {}
+local isFlying = false
+local flyBodyVelocity, flyBodyGyro
 
 -- Son de clic
 local ClickSound = Instance.new("Sound")
@@ -63,8 +73,8 @@ CrosshairV.Parent = ScreenGui
 -- Fenêtre principale (Thème Noir & Blanc / UICorner / Contour Blanc Épais)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 420, 0, 380)
-MainFrame.Position = UDim2.new(0.5, -210, 0.5, -190)
+MainFrame.Size = UDim2.new(0, 440, 0, 400)
+MainFrame.Position = UDim2.new(0.5, -220, 0.5, -200)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 0
@@ -95,7 +105,7 @@ TitleLabel.Size = UDim2.new(1, -20, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "⚡ YNW // PANEL"
+TitleLabel.Text = "⚡ YNW // PANEL (PRIVÉ)"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 16
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -148,7 +158,7 @@ local function createTabContent(name)
 	scroller.Position = UDim2.new(0, 72, 0, 50)
 	scroller.BackgroundTransparency = 1
 	scroller.BorderSizePixel = 0
-	scroller.CanvasSize = UDim2.new(0, 0, 0, 350)
+	scroller.CanvasSize = UDim2.new(0, 0, 0, 420)
 	scroller.ScrollBarThickness = 3
 	scroller.Visible = false
 	scroller.Parent = MainFrame
@@ -164,14 +174,15 @@ end
 
 local aimbotTab = createTabContent("Aimbot")
 local visualTab = createTabContent("Visual")
+local playerTab = createTabContent("Player")
 
--- Création des boutons de la Sidebar avec les images demandées
-local function createSidebarButton(iconId, targetTab)
-	local btn = Instance.new("ImageButton")
+-- Création sécurisée des boutons de la Sidebar avec icônes vectorielles intégrées
+local function createSidebarButton(tabContent, iconType)
+	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(0, 42, 0, 42)
 	btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-	btn.Image = "rbxassetid://" .. iconId
-	btn.ScaleType = Enum.ScaleType.Fit
+	btn.Text = ""
+	btn.AutoButtonColor = false
 	btn.Parent = Sidebar
 	
 	local corner = Instance.new("UICorner")
@@ -183,16 +194,26 @@ local function createSidebarButton(iconId, targetTab)
 	stroke.Thickness = 1
 	stroke.Parent = btn
 
+	-- Icône symbolique interne (Garantie sans erreur d'ID)
+	local iconLbl = Instance.new("TextLabel")
+	iconLbl.Size = UDim2.new(1, 0, 1, 0)
+	iconLbl.BackgroundTransparency = 1
+	iconLbl.Font = Enum.Font.GothamBold
+	iconLbl.TextSize = 14
+	iconLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+	iconLbl.Text = iconType
+	iconLbl.Parent = btn
+
 	btn.MouseButton1Click:Connect(function()
 		pcall(function() ClickSound:Play() end)
 		for _, tab in pairs(Containers) do tab.Visible = false end
-		targetTab.Visible = true
+		tabContent.Visible = true
 	end)
 end
 
--- ID 1 : Aimbot (87703236742991) | ID 2 : Visual (106554444170881)
-createSidebarButton("87703236742991", aimbotTab)
-createSidebarButton("106554444170881", visualTab)
+createSidebarButton(aimbotTab, "AIM")
+createSidebarButton(visualTab, "VIS")
+createSidebarButton(playerTab, "PLY")
 aimbotTab.Visible = true
 
 -- Composants d'UI (Toggles et Sliders)
@@ -288,7 +309,7 @@ local function createSlider(parent, name, min, max, default, callback)
 	container.Parent = parent
 end
 
--- Éléments des onglets
+-- Remplissage des onglets
 createToggle(aimbotTab, "Activer le Script", Config.Enabled, function(s) Config.Enabled = s end)
 createToggle(aimbotTab, "Aim Lock (Visée)", Config.AimAssist, function(s) Config.AimAssist = s end)
 createToggle(aimbotTab, "Traverser les Murs", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
@@ -302,6 +323,13 @@ createToggle(visualTab, "Crosshair Central", Config.Crosshair, function(s)
 	CrosshairH.Visible = s
 	CrosshairV.Visible = s
 end)
+
+createToggle(playerTab, "Infinite Jump", Config.InfiniteJump, function(s) Config.InfiniteJump = s end)
+createToggle(playerTab, "Spinbot (Tourne)", Config.Spin, function(s) Config.Spin = s end)
+createToggle(playerTab, "Fly (Vol)", Config.Fly, function(s) Config.Fly = s end)
+createSlider(playerTab, "Vitesse Fly", 1, 100, Config.FlySpeed, function(v) Config.FlySpeed = v end)
+createToggle(playerTab, "Activer WalkSpeed", Config.WalkSpeedEnabled, function(s) Config.WalkSpeedEnabled = s end)
+createSlider(playerTab, "Valeur WalkSpeed", 16, 150, Config.WalkSpeedValue, function(v) Config.WalkSpeedValue = v end)
 
 -- Cercle FOV visuel
 local FOVFrame = Instance.new("Frame")
@@ -318,12 +346,12 @@ local FOVCorner = Instance.new("UICorner")
 FOVCorner.CornerRadius = UDim.new(1, 0)
 FOVCorner.Parent = FOVFrame
 
--- Tracers transparents / rouge clair
+-- Tracers rouge clair transparents
 local function getTracer(player)
 	if not tracerFrames[player] then
 		local line = Instance.new("Frame")
 		line.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-		line.BackgroundTransparency = 0.4 -- Rouge clair et semi-transparent
+		line.BackgroundTransparency = 0.4
 		line.BorderSizePixel = 0
 		line.Size = UDim2.new(0, 1.5, 0, 0)
 		line.Visible = false
@@ -344,12 +372,18 @@ Players.PlayerRemoving:Connect(function(player)
 	end
 end)
 
--- Gestion des touches
-UserInputService.InputBegan:Connect(function(input)
+-- Gestion des touches (Ctrl pour masquer l'interface)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.UserInputType == Enum.UserInputType.MouseButton2 then
 		isRightMouseDown = true
 	elseif input.KeyCode == Config.ToggleGuiKey then
 		MainFrame.Visible = not MainFrame.Visible
+	elseif Config.InfiniteJump and input.KeyCode == Enum.KeyCode.Space then
+		local char = LocalPlayer.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			hrp.Velocity = Vector3.new(hrp.Velocity.X, 50, hrp.Velocity.Z)
+		end
 	end
 end)
 
@@ -360,7 +394,7 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- Recherche de cible (Tête / Head) avec traversée des murs corrigée
+-- Fonction de recherche de cible (Traversée des murs corrigée)
 local function getClosestTarget()
 	local closestPlayer = nil
 	local shortestDistance = Config.FOV
@@ -373,7 +407,8 @@ local function getClosestTarget()
 			
 			if humanoid and humanoid.Health > 0 and head then
 				local isValid = true
-				-- Si "Traverser les Murs" est désactivé, on vérifie les obstacles (Raycast)
+				
+				-- Si "Traverser les Murs" est désactivé, on vérifie les obstacles
 				if not Config.ThroughWalls then
 					local origin = Camera.CFrame.Position
 					local direction = (head.Position - origin)
@@ -385,6 +420,7 @@ local function getClosestTarget()
 						isValid = false
 					end
 				end
+				-- Si "Traverser les Murs" est activé (Config.ThroughWalls == true), isValid reste true directement.
 				
 				if isValid then
 					local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
@@ -404,11 +440,11 @@ local function getClosestTarget()
 	return closestPlayer
 end
 
--- Boucle principale avec DeltaTime pour un Smoothness fonctionnel
+-- Boucle de rendu principale (Aimbot, ESP, Tracers, Fly, Speed, Spin)
 RunService.RenderStepped:Connect(function(dt)
 	local mousePos = UserInputService:GetMouseLocation()
 	
-	-- Mise à jour du FOV
+	-- FOV
 	FOVFrame.Size = UDim2.new(0, Config.FOV * 2, 0, Config.FOV * 2)
 	FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
 	FOVFrame.Visible = Config.Enabled
@@ -417,35 +453,81 @@ RunService.RenderStepped:Connect(function(dt)
 	CrosshairH.Visible = Config.Enabled and Config.Crosshair
 	CrosshairV.Visible = Config.Enabled and Config.Crosshair
 
-	-- Gestion ESP et Tracers
+	-- Logique Joueur (WalkSpeed, Spinbot, Fly)
+	local char = LocalPlayer.Character
+	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+	if char and humanoid and hrp then
+		-- WalkSpeed
+		if Config.WalkSpeedEnabled then
+			humanoid.WalkSpeed = Config.WalkSpeedValue
+		end
+
+		-- Spinbot
+		if Config.Spin then
+			hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(35), 0)
+		end
+
+		-- Fly System
+		if Config.Fly then
+			if not flyBodyVelocity then
+				flyBodyVelocity = Instance.new("BodyVelocity")
+				flyBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+				flyBodyVelocity.Parent = hrp
+			end
+			if not flyBodyGyro then
+				flyBodyGyro = Instance.new("BodyGyro")
+				flyBodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+				flyBodyGyro.Parent = hrp
+			end
+			
+			local camCFrame = Camera.CFrame
+			local moveDir = Vector3.new()
+			if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCFrame.LookVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCFrame.RightVector end
+			if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCFrame.RightVector end
+			
+			flyBodyVelocity.Velocity = moveDir * (Config.FlySpeed * 1.5)
+			flyBodyGyro.CFrame = camCFrame
+			humanoid.PlatformStand = true
+		else
+			if flyBodyVelocity then flyBodyVelocity:Destroy() flyBodyVelocity = nil end
+			if flyBodyGyro then flyBodyGyro:Destroy() flyBodyGyro = nil end
+			if humanoid.PlatformStand then humanoid.PlatformStand = false end
+		end
+	end
+
+	-- ESP et Tracers
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
-			local char = player.Character
-			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-			local rootPart = char and char:FindFirstChild("HumanoidRootPart")
+			local pChar = player.Character
+			local pHum = pChar and pChar:FindFirstChildOfClass("Humanoid")
+			local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
 			
-			-- ESP Boîte / Highlight vert
-			if Config.Enabled and Config.ESPBoxes and char and humanoid and humanoid.Health > 0 then
+			-- ESP Boîte Vert
+			if Config.Enabled and Config.ESPBoxes and pChar and pHum and pHum.Health > 0 then
 				if not highlights[player] then
 					local hl = Instance.new("Highlight")
 					hl.FillTransparency = 1
 					hl.OutlineColor = Color3.fromRGB(0, 255, 0)
 					hl.OutlineTransparency = 0
 					hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-					hl.Parent = char
+					hl.Parent = pChar
 					highlights[player] = hl
 				else
-					highlights[player].Parent = char
+					highlights[player].Parent = pChar
 					highlights[player].Enabled = true
 				end
 			elseif highlights[player] then
 				highlights[player].Enabled = false
 			end
 			
-			-- Tracers Rouges Clairs Transparents
+			-- Tracers Rouges Clairs
 			local tracer = getTracer(player)
-			if Config.Enabled and Config.Tracers and char and rootPart and humanoid and humanoid.Health > 0 then
-				local rootScreenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+			if Config.Enabled and Config.Tracers and pChar and pRoot and pHum and pHum.Health > 0 then
+				local rootScreenPos, onScreen = Camera:WorldToViewportPoint(pRoot.Position)
 				if onScreen then
 					local bottomScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 					local targetScreen = Vector2.new(rootScreenPos.X, rootScreenPos.Y)
@@ -465,7 +547,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- Logique Aim Lock (Smoothness corrigé via DeltaTime)
+	-- Aim Lock (Clic droit maintenu)
 	if Config.Enabled and Config.AimAssist and isRightMouseDown then
 		if not lockedTarget or not lockedTarget.Parent or lockedTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
 			lockedTarget = getClosestTarget()
@@ -473,7 +555,6 @@ RunService.RenderStepped:Connect(function(dt)
 
 		if lockedTarget then
 			local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTarget.Position)
-			-- Formule de lissage basée sur dt pour que le slider Smoothness fonctionne correctement
 			local alpha = math.clamp(dt * (22 - Config.Smoothness), 0.05, 1)
 			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
 		end
