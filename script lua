@@ -13,10 +13,11 @@ local Config = {
 	Enabled = true,
 	AimAssist = true,
 	FOV = 150,
-	Smoothness = 6,
+	Smoothness = 6, -- Ajusté pour être parfaitement dynamique
 	ThroughWalls = true,
 	Tracers = true,
 	ESPBoxes = true,
+	Crosshair = true,
 	MenuKey = Enum.KeyCode.RightShift,
 	ToggleGuiKey = Enum.KeyCode.LeftControl
 }
@@ -27,7 +28,7 @@ local lockedTarget = nil
 local highlights = {}
 local tracerFrames = {}
 
--- Son de clic amplifié (ID : 140910211)
+-- Son de clic
 local ClickSound = Instance.new("Sound")
 ClickSound.SoundId = "rbxassetid://140910211"
 ClickSound.Volume = 1.5
@@ -42,34 +43,51 @@ ScreenGui.DisplayOrder = 999999
 local success, _ = pcall(function() ScreenGui.Parent = CoreGui end)
 if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
--- Fenêtre principale
+-- Réticule central (Crosshair)
+local CrosshairH = Instance.new("Frame")
+CrosshairH.Size = UDim2.new(0, 12, 0, 2)
+CrosshairH.AnchorPoint = Vector2.new(0.5, 0.5)
+CrosshairH.Position = UDim2.new(0.5, 0, 0.5, 0)
+CrosshairH.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+CrosshairH.BorderSizePixel = 0
+CrosshairH.Parent = ScreenGui
+
+local CrosshairV = Instance.new("Frame")
+CrosshairV.Size = UDim2.new(0, 2, 0, 12)
+CrosshairV.AnchorPoint = Vector2.new(0.5, 0.5)
+CrosshairV.Position = UDim2.new(0.5, 0, 0.5, 0)
+CrosshairV.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+CrosshairV.BorderSizePixel = 0
+CrosshairV.Parent = ScreenGui
+
+-- Fenêtre principale (Thème Noir & Blanc / UICorner / Contour Blanc Épais)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 420, 0, 360)
-MainFrame.Position = UDim2.new(0.5, -210, 0.5, -180)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+MainFrame.Size = UDim2.new(0, 420, 0, 380)
+MainFrame.Position = UDim2.new(0.5, -210, 0.5, -190)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 0
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.CornerRadius = UDim.new(0, 12)
 MainCorner.Parent = MainFrame
 
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Color3.fromRGB(0, 229, 255)
-MainStroke.Thickness = 1.5
-MainStroke.Transparency = 0.3
+MainStroke.Color = Color3.fromRGB(240, 240, 240)
+MainStroke.Thickness = 2.5
 MainStroke.Parent = MainFrame
 
 -- Barre supérieure (Déplacement)
 local TopBar = Instance.new("Frame")
-TopBar.Size = UDim2.new(1, 0, 0, 40)
-TopBar.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
+TopBar.Size = UDim2.new(1, 0, 0, 42)
+TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 TopBar.BorderSizePixel = 0
 TopBar.Parent = MainFrame
 
 local TopBarCorner = Instance.new("UICorner")
-TopBarCorner.CornerRadius = UDim.new(0, 10)
+TopBarCorner.CornerRadius = UDim.new(0, 12)
 TopBarCorner.Parent = TopBar
 
 local TitleLabel = Instance.new("TextLabel")
@@ -78,7 +96,7 @@ TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
 TitleLabel.Text = "⚡ YNW // PANEL"
-TitleLabel.TextColor3 = Color3.fromRGB(0, 229, 255)
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 16
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TopBar
@@ -102,11 +120,11 @@ UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
 end)
 
--- Barre latérale (Sidebar avec les icônes demandées)
+-- Barre latérale (Sidebar)
 local Sidebar = Instance.new("Frame")
-Sidebar.Size = UDim2.new(0, 60, 1, -40)
-Sidebar.Position = UDim2.new(0, 0, 0, 40)
-Sidebar.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+Sidebar.Size = UDim2.new(0, 65, 1, -42)
+Sidebar.Position = UDim2.new(0, 0, 0, 42)
+Sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 Sidebar.BorderSizePixel = 0
 Sidebar.Parent = MainFrame
 
@@ -118,7 +136,7 @@ UIListSidebar.SortOrder = Enum.SortOrder.LayoutOrder
 UIListSidebar.Parent = Sidebar
 
 local UICornerSide = Instance.new("UICorner")
-UICornerSide.CornerRadius = UDim.new(0, 10)
+UICornerSide.CornerRadius = UDim.new(0, 12)
 UICornerSide.Parent = Sidebar
 
 -- Conteneurs des onglets
@@ -127,7 +145,7 @@ local Containers = {}
 local function createTabContent(name)
 	local scroller = Instance.new("ScrollingFrame")
 	scroller.Size = UDim2.new(1, -75, 1, -55)
-	scroller.Position = UDim2.new(0, 70, 0, 48)
+	scroller.Position = UDim2.new(0, 72, 0, 50)
 	scroller.BackgroundTransparency = 1
 	scroller.BorderSizePixel = 0
 	scroller.CanvasSize = UDim2.new(0, 0, 0, 350)
@@ -147,11 +165,11 @@ end
 local aimbotTab = createTabContent("Aimbot")
 local visualTab = createTabContent("Visual")
 
--- Création des boutons de la Sidebar avec les ID d'images exacts
+-- Création des boutons de la Sidebar avec les images demandées
 local function createSidebarButton(iconId, targetTab)
 	local btn = Instance.new("ImageButton")
-	btn.Size = UDim2.new(0, 40, 0, 40)
-	btn.BackgroundColor3 = Color3.fromRGB(25, 25, 38)
+	btn.Size = UDim2.new(0, 42, 0, 42)
+	btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	btn.Image = "rbxassetid://" .. iconId
 	btn.ScaleType = Enum.ScaleType.Fit
 	btn.Parent = Sidebar
@@ -160,6 +178,11 @@ local function createSidebarButton(iconId, targetTab)
 	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = btn
 	
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(200, 200, 200)
+	stroke.Thickness = 1
+	stroke.Parent = btn
+
 	btn.MouseButton1Click:Connect(function()
 		pcall(function() ClickSound:Play() end)
 		for _, tab in pairs(Containers) do tab.Visible = false end
@@ -167,12 +190,12 @@ local function createSidebarButton(iconId, targetTab)
 	end)
 end
 
--- ID 1 : Aimbot (87703236742991) | ID 2 : ESP / Visual (106554444170881)
+-- ID 1 : Aimbot (87703236742991) | ID 2 : Visual (106554444170881)
 createSidebarButton("87703236742991", aimbotTab)
 createSidebarButton("106554444170881", visualTab)
-aimbotTab.Visible = true -- Onglet par défaut
+aimbotTab.Visible = true
 
--- Fonctions d'interface (Toggles et Sliders)
+-- Composants d'UI (Toggles et Sliders)
 local function createToggle(parent, name, defaultState, callback)
 	local container = Instance.new("Frame")
 	container.Size = UDim2.new(1, 0, 0, 32)
@@ -183,7 +206,7 @@ local function createToggle(parent, name, defaultState, callback)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.Gotham
 	label.Text = name
-	label.TextColor3 = Color3.fromRGB(210, 210, 230)
+	label.TextColor3 = Color3.fromRGB(230, 230, 230)
 	label.TextSize = 12
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = container
@@ -191,7 +214,7 @@ local function createToggle(parent, name, defaultState, callback)
 	local button = Instance.new("TextButton")
 	button.Size = UDim2.new(0, 48, 0, 22)
 	button.Position = UDim2.new(1, -48, 0.5, -11)
-	button.BackgroundColor3 = defaultState and Color3.fromRGB(0, 229, 255) or Color3.fromRGB(35, 35, 50)
+	button.BackgroundColor3 = defaultState and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(45, 45, 45)
 	button.AutoButtonColor = false
 	button.Text = ""
 	button.Parent = container
@@ -204,7 +227,7 @@ local function createToggle(parent, name, defaultState, callback)
 	button.MouseButton1Click:Connect(function()
 		state = not state
 		pcall(function() ClickSound:Play() end)
-		button.BackgroundColor3 = state and Color3.fromRGB(0, 229, 255) or Color3.fromRGB(35, 35, 50)
+		button.BackgroundColor3 = state and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(45, 45, 45)
 		callback(state)
 	end)
 	container.Parent = parent
@@ -220,7 +243,7 @@ local function createSlider(parent, name, min, max, default, callback)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.Gotham
 	label.Text = name .. " : " .. default
-	label.TextColor3 = Color3.fromRGB(210, 210, 230)
+	label.TextColor3 = Color3.fromRGB(230, 230, 230)
 	label.TextSize = 12
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = container
@@ -228,7 +251,7 @@ local function createSlider(parent, name, min, max, default, callback)
 	local sliderBar = Instance.new("Frame")
 	sliderBar.Size = UDim2.new(1, 0, 0, 6)
 	sliderBar.Position = UDim2.new(0, 0, 0, 28)
-	sliderBar.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+	sliderBar.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
 	sliderBar.BorderSizePixel = 0
 	sliderBar.Parent = container
 	
@@ -238,7 +261,7 @@ local function createSlider(parent, name, min, max, default, callback)
 	
 	local fill = Instance.new("Frame")
 	fill.Size = UDim2.new((default - min)/(max - min), 0, 1, 0)
-	fill.BackgroundColor3 = Color3.fromRGB(0, 229, 255)
+	fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	fill.BorderSizePixel = 0
 	fill.Parent = sliderBar
 	
@@ -265,38 +288,44 @@ local function createSlider(parent, name, min, max, default, callback)
 	container.Parent = parent
 end
 
--- Remplissage des onglets
+-- Éléments des onglets
 createToggle(aimbotTab, "Activer le Script", Config.Enabled, function(s) Config.Enabled = s end)
 createToggle(aimbotTab, "Aim Lock (Visée)", Config.AimAssist, function(s) Config.AimAssist = s end)
 createToggle(aimbotTab, "Traverser les Murs", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
 createSlider(aimbotTab, "Taille FOV", 50, 400, Config.FOV, function(v) Config.FOV = v end)
 createSlider(aimbotTab, "Smoothness (Vitesse)", 1, 20, Config.Smoothness, function(v) Config.Smoothness = v end)
 
-createToggle(visualTab, "ESP Boîte / Highlight", Config.ESPBoxes, function(s) Config.ESPBoxes = s end)
-createToggle(visualTab, "Tracers Rouges", Config.Tracers, function(s) Config.Tracers = s end)
+createToggle(visualTab, "ESP Boîte Vert", Config.ESPBoxes, function(s) Config.ESPBoxes = s end)
+createToggle(visualTab, "Tracers Rouges Clairs", Config.Tracers, function(s) Config.Tracers = s end)
+createToggle(visualTab, "Crosshair Central", Config.Crosshair, function(s) 
+	Config.Crosshair = s 
+	CrosshairH.Visible = s
+	CrosshairV.Visible = s
+end)
 
--- Cercle FOV natif
+-- Cercle FOV visuel
 local FOVFrame = Instance.new("Frame")
 FOVFrame.BackgroundTransparency = 1
 FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 FOVFrame.Parent = ScreenGui
 
 local FOVStroke = Instance.new("UIStroke")
-FOVStroke.Color = Color3.fromRGB(0, 229, 255)
-FOVStroke.Thickness = 1.2
-FOVStroke.Transparency = 0.5
+FOVStroke.Color = Color3.fromRGB(255, 255, 255)
+FOVStroke.Thickness = 1.5
+FOVStroke.Transparency = 0.4
 FOVStroke.Parent = FOVFrame
 local FOVCorner = Instance.new("UICorner")
 FOVCorner.CornerRadius = UDim.new(1, 0)
 FOVCorner.Parent = FOVFrame
 
--- Tracers natifs (lignes avec des frames)
+-- Tracers transparents / rouge clair
 local function getTracer(player)
 	if not tracerFrames[player] then
 		local line = Instance.new("Frame")
-		line.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+		line.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+		line.BackgroundTransparency = 0.4 -- Rouge clair et semi-transparent
 		line.BorderSizePixel = 0
-		line.Size = UDim2.new(0, 1, 0, 0)
+		line.Size = UDim2.new(0, 1.5, 0, 0)
 		line.Visible = false
 		line.Parent = ScreenGui
 		tracerFrames[player] = line
@@ -315,7 +344,7 @@ Players.PlayerRemoving:Connect(function(player)
 	end
 end)
 
--- Gestion des touches (Cible et Clavier)
+-- Gestion des touches
 UserInputService.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton2 then
 		isRightMouseDown = true
@@ -331,7 +360,7 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- Recherche de cible (Tête / Head) avec gestion corrigée du traverser les murs
+-- Recherche de cible (Tête / Head) avec traversée des murs corrigée
 local function getClosestTarget()
 	local closestPlayer = nil
 	local shortestDistance = Config.FOV
@@ -344,7 +373,7 @@ local function getClosestTarget()
 			
 			if humanoid and humanoid.Health > 0 and head then
 				local isValid = true
-				-- Si "Traverser les Murs" est désactivé, on fait un Raycast de vérification
+				-- Si "Traverser les Murs" est désactivé, on vérifie les obstacles (Raycast)
 				if not Config.ThroughWalls then
 					local origin = Camera.CFrame.Position
 					local direction = (head.Position - origin)
@@ -353,7 +382,7 @@ local function getClosestTarget()
 					raycastParams.FilterType = RaycastType.Exclude
 					local result = workspace:Raycast(origin, direction, raycastParams)
 					if result then
-						isValid = false -- Obstacle détecté
+						isValid = false
 					end
 				end
 				
@@ -375,14 +404,18 @@ local function getClosestTarget()
 	return closestPlayer
 end
 
--- Boucle de rendu principale
-RunService.RenderStepped:Connect(function()
+-- Boucle principale avec DeltaTime pour un Smoothness fonctionnel
+RunService.RenderStepped:Connect(function(dt)
 	local mousePos = UserInputService:GetMouseLocation()
 	
 	-- Mise à jour du FOV
 	FOVFrame.Size = UDim2.new(0, Config.FOV * 2, 0, Config.FOV * 2)
 	FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
 	FOVFrame.Visible = Config.Enabled
+
+	-- Crosshair
+	CrosshairH.Visible = Config.Enabled and Config.Crosshair
+	CrosshairV.Visible = Config.Enabled and Config.Crosshair
 
 	-- Gestion ESP et Tracers
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -409,7 +442,7 @@ RunService.RenderStepped:Connect(function()
 				highlights[player].Enabled = false
 			end
 			
-			-- Tracers Rouges
+			-- Tracers Rouges Clairs Transparents
 			local tracer = getTracer(player)
 			if Config.Enabled and Config.Tracers and char and rootPart and humanoid and humanoid.Health > 0 then
 				local rootScreenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
@@ -432,7 +465,7 @@ RunService.RenderStepped:Connect(function()
 		end
 	end
 
-	-- Logique Aim Lock (Maintien clic droit)
+	-- Logique Aim Lock (Smoothness corrigé via DeltaTime)
 	if Config.Enabled and Config.AimAssist and isRightMouseDown then
 		if not lockedTarget or not lockedTarget.Parent or lockedTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
 			lockedTarget = getClosestTarget()
@@ -440,7 +473,9 @@ RunService.RenderStepped:Connect(function()
 
 		if lockedTarget then
 			local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTarget.Position)
-			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 1 / Config.Smoothness)
+			-- Formule de lissage basée sur dt pour que le slider Smoothness fonctionne correctement
+			local alpha = math.clamp(dt * (22 - Config.Smoothness), 0.05, 1)
+			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
 		end
 	else
 		lockedTarget = nil
