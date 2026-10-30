@@ -12,8 +12,8 @@ local Camera = workspace.CurrentCamera
 -- Paramètres configurables
 local Config = {
 	AimAssist = false,
-	FOV = 35,
-	Smoothness = 6,
+	FOV = 70,
+	Smoothness = 5,
 	ThroughWalls = false,
 	Tracers = false,
 	ESPBoxes = false,
@@ -30,7 +30,7 @@ local Config = {
 	-- Settings / Anti-Lag
 	AntiLag = false,
 	
-	ToggleGuiKey = Enum.KeyCode.LeftControl
+	ToggleGuiKey = Enum.KeyCode.H -- Changé sur la touche H
 }
 
 -- État interne
@@ -88,9 +88,9 @@ TitleLabel.Size = UDim2.new(1, -20, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "⚡ YNW // RIVALS PANEL"
+TitleLabel.Text = "⚡ YNW // RIVALS PANEL (OPTIMISÉ)"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 16
+TitleLabel.TextSize = 15
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TopBar
 
@@ -287,7 +287,7 @@ end
 -- Configuration AIM
 createToggle(aimbotTab, "Aimbot Auto (FOV)", Config.AimAssist, function(s) Config.AimAssist = s end)
 createToggle(aimbotTab, "Traverser les Murs & Balles", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
-createSlider(aimbotTab, "Taille FOV", 1, 100, Config.FOV, function(v) Config.FOV = v end)
+createSlider(aimbotTab, "Taille FOV", 1, 200, Config.FOV, function(v) Config.FOV = v end)
 createSlider(aimbotTab, "Smoothness (Vitesse)", 1, 20, Config.Smoothness, function(v) Config.Smoothness = v end)
 
 -- Tableau / Liste des joueurs (Compatible Rivals)
@@ -378,8 +378,8 @@ createSlider(playerTab, "Vitesse Fly", 1, 100, Config.FlySpeed, function(v) Conf
 createToggle(playerTab, "Activer WalkSpeed", Config.WalkSpeedEnabled, function(s) Config.WalkSpeedEnabled = s end)
 createSlider(playerTab, "Valeur WalkSpeed", 16, 150, Config.WalkSpeedValue, function(v) Config.WalkSpeedValue = v end)
 
--- Options SETTINGS (Anti-Lag & FPS Boost - SmoothPlastic & Ombres)
-createToggle(settingsTab, "Anti-Lag & FPS Boost", Config.AntiLag, function(s)
+-- Options SETTINGS (Anti-Lag / Réduction de textures en SmoothPlastic et suppression des ombres)
+createToggle(settingsTab, "Anti-Lag & FPS Boost (SmoothPlastic)", Config.AntiLag, function(s)
 	Config.AntiLag = s
 	if s then
 		pcall(function()
@@ -390,7 +390,7 @@ createToggle(settingsTab, "Anti-Lag & FPS Boost", Config.AntiLag, function(s)
 				if v:IsA("BasePart") then
 					v.Material = Enum.Material.SmoothPlastic
 					v.Reflectance = 0
-				elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+				elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Fire") or v:IsA("Sparkles") then
 					v.Enabled = false
 				end
 			end
@@ -398,7 +398,7 @@ createToggle(settingsTab, "Anti-Lag & FPS Boost", Config.AntiLag, function(s)
 	end
 end)
 
--- Cercle FOV Précis
+-- Cercle FOV Parfaitement centré sur le réticule natif de Rivals
 local FOVFrame = Instance.new("Frame")
 FOVFrame.BackgroundTransparency = 1
 FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -407,7 +407,7 @@ FOVFrame.Parent = ScreenGui
 local FOVStroke = Instance.new("UIStroke")
 FOVStroke.Color = Color3.fromRGB(255, 255, 255)
 FOVStroke.Thickness = 1.5
-FOVStroke.Transparency = 0.3
+FOVStroke.Transparency = 0.2
 FOVStroke.Parent = FOVFrame
 local FOVCorner = Instance.new("UICorner")
 FOVCorner.CornerRadius = UDim.new(1, 0)
@@ -457,7 +457,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
--- Fonction de recherche de cible sécurisée (Correction de l'erreur Exclude)
+-- Fonction de recherche de cible strictement alignée au centre exact de l'écran (Crosshair Rivals)
 local function getClosestTarget()
 	if Config.SelectedTargetPlayer and Config.SelectedTargetPlayer.Character then
 		local targetPart = getTargetPart(Config.SelectedTargetPlayer.Character)
@@ -465,9 +465,9 @@ local function getClosestTarget()
 	end
 
 	local closestPart = nil
-	local fovRadius = Config.FOV * 4
+	local fovRadius = Config.FOV * 3
 	local shortestDistance = fovRadius
-	local mousePos = UserInputService:GetMouseLocation()
+	local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer and player.Character then
@@ -491,7 +491,7 @@ local function getClosestTarget()
 				if isValid then
 					local screenPoint, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
 					if onScreen then
-						local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - mousePos).Magnitude
+						local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
 						if distance < shortestDistance then
 							shortestDistance = distance
 							closestPart = targetPart
@@ -504,7 +504,7 @@ local function getClosestTarget()
 	return closestPart
 end
 
--- Hook sécurisé pour les tirs à travers les murs (Wallbang)
+-- Hook pour les tirs traversant les murs et portée infinie
 pcall(function()
 	if hookfunction and rawget(workspace, "Raycast") then
 		local oldRaycast
@@ -522,11 +522,9 @@ end)
 
 -- Boucle principale de rendu
 RunService.RenderStepped:Connect(function(dt)
-	local mousePos = UserInputService:GetMouseLocation()
-	local currentFOVSize = Config.FOV * 4
-	
-	FOVFrame.Size = UDim2.new(0, currentFOVSize * 2, 0, currentFOVSize * 2)
-	FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
+	-- Fix absolu : Le cercle de la FOV est positionné exactement au centre de l'écran du jeu
+	FOVFrame.Size = UDim2.new(0, Config.FOV * 6, 0, Config.FOV * 6)
+	FOVFrame.Position = UDim2.new(0, Camera.ViewportSize.X / 2, 0, Camera.ViewportSize.Y / 2)
 	FOVFrame.Visible = Config.AimAssist
 
 	-- Mouvements Joueur
@@ -614,12 +612,12 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- Aimbot automatique
+	-- Aimbot automatique centré sur le crosshair natif
 	if Config.AimAssist then
 		local currentTarget = getClosestTarget()
 		if currentTarget then
 			local targetCFrame = CFrame.new(Camera.CFrame.Position, currentTarget.Position)
-			local alpha = math.clamp(dt * (22 - Config.Smoothness), 0.05, 1)
+			local alpha = math.clamp(dt * (24 - Config.Smoothness), 0.05, 1)
 			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
 		end
 	end
