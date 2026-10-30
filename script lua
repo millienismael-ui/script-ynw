@@ -6,7 +6,6 @@ print("==================================================")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local InsertService = game:GetService("InsertService")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -23,7 +22,7 @@ screenGui.Parent = PlayerGui
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 220, 0, 110)
 mainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+mainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12) -- Noir pur
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
 
@@ -32,7 +31,7 @@ frameCorner.CornerRadius = UDim.new(0, 8)
 frameCorner.Parent = mainFrame
 
 local frameStroke = Instance.new("UIStroke")
-frameStroke.Color = Color3.fromRGB(255, 255, 255)
+frameStroke.Color = Color3.fromRGB(255, 255, 255) -- Contour blanc futuriste
 frameStroke.Thickness = 1.5
 frameStroke.Parent = mainFrame
 
@@ -52,6 +51,7 @@ toggleButton.Size = UDim2.new(1, -20, 0, 40)
 toggleButton.Position = UDim2.new(0, 10, 0, 50)
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.TextSize.Text = 12
 toggleButton.TextSize = 12
 toggleButton.Font = Enum.Font.GothamSemibold
 toggleButton.Text = "Orbite Épée : OFF"
@@ -66,19 +66,10 @@ btnStroke.Color = Color3.fromRGB(200, 200, 200)
 btnStroke.Thickness = 1
 btnStroke.Parent = toggleButton
 
--- 2. Gestion des touches clavier (Alt pour cacher, M pour afficher)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
-		mainFrame.Visible = false -- Cache l'UI
-	elseif input.KeyCode == Enum.KeyCode.M then
-		mainFrame.Visible = true -- Fait réapparaître l'UI
-	end
-end)
-
--- 3. Logique de l'Orbite avec une Épée
+-- 2. Logique de l'Orbite avec une Épée du catalogue (Asset ID d'une épée classique Roblox)
 local orbitActive = false
 local spawnedParts = {}
-local SWORD_ID = 126955541 -- ID de l'accessoire épée
+local SWORD_ID = 126955541 -- ID d'un accessoire d'épée stylé sur Roblox
 
 toggleButton.MouseButton1Click:Connect(function()
 	orbitActive = not orbitActive
@@ -92,7 +83,7 @@ toggleButton.MouseButton1Click:Connect(function()
 		toggleButton.BackgroundColor3 = Color3.fromRGB(0, 180, 100)
 		spawnedParts = {}
 
-		-- Charge l'épée depuis Roblox
+		-- Charge l'épée depuis Roblox de manière sécurisée
 		pcall(function()
 			local model = InsertService:LoadAsset(SWORD_ID)
 			for _, item in ipairs(model:GetChildren()) do
@@ -110,7 +101,7 @@ toggleButton.MouseButton1Click:Connect(function()
 			end
 		end)
 
-		-- Ajoute aussi les accessoires du joueur
+		-- Ajoute aussi les accessoires existants du joueur pour faire un effet de groupe
 		for _, obj in ipairs(character:GetChildren()) do
 			if obj:IsA("Accessory") then
 				local handle = obj:FindFirstChild("Handle")
@@ -127,11 +118,11 @@ toggleButton.MouseButton1Click:Connect(function()
 		toggleButton.Text = "Orbite Épée : OFF"
 		toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 		orbitActive = false
-		LocalPlayer.Character:BreakJoints() -- Reset pour remettre l'avatar propre
+		LocalPlayer.Character:BreakJoints() -- Reset propre pour remettre l'avatar d'origine
 	end
 end)
 
--- Boucle d'animation fluide
+-- Boucle d'animation fluide en orbite serrée
 RunService.Heartbeat:Connect(function()
 	if not orbitActive then return end
 	local character = LocalPlayer.Character
@@ -148,7 +139,7 @@ RunService.Heartbeat:Connect(function()
 			pcall(function()
 				handle:WakeUp()
 				local angle = t_tick + ((i / total) * (math.pi * 2))
-				local radius = 3.5
+		local radius = 3.5 -- Cercle très proche et dynamique autour du joueur
 				local pos = hrp.Position + Vector3.new(math.cos(angle) * radius, 1.5, math.sin(angle) * radius)
 				handle.CFrame = CFrame.new(pos) * CFrame.Angles(t_tick, t_tick * 1.5, 0)
 			end)
