@@ -8,15 +8,16 @@ local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Paramètres configurables (Indépendants)
+-- Paramètres configurables
 local Config = {
 	AimAssist = true,
 	FOV = 150,
 	Smoothness = 6,
-	ThroughWalls = true,
+	ThroughWalls = true, -- Traverser les murs activé par défaut
 	Tracers = true,
 	ESPBoxes = true,
 	Crosshair = true,
+	SelectedTargetPlayer = nil, -- Joueur ciblé manuellement via la liste
 	
 	-- Options Player
 	InfiniteJump = false,
@@ -68,13 +69,13 @@ CrosshairV.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 CrosshairV.BorderSizePixel = 0
 CrosshairV.Parent = ScreenGui
 
--- Fenêtre principale (Thème Noir & Blanc)
+-- Fenêtre principale (Thème Noir & Blanc / Design épuré)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 440, 0, 400)
-MainFrame.Position = UDim2.new(0.5, -220, 0.5, -200)
+MainFrame.Size = UDim2.new(0, 480, 0, 420)
+MainFrame.Position = UDim2.new(0.5, -240, 0.5, -210)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MainFrame.BackgroundTransparency = 0.1
+MainFrame.BackgroundTransparency = 0.05
 MainFrame.BorderSizePixel = 0
 MainFrame.Parent = ScreenGui
 
@@ -83,7 +84,7 @@ MainCorner.CornerRadius = UDim.new(0, 12)
 MainCorner.Parent = MainFrame
 
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Color = Color3.fromRGB(240, 240, 240)
+MainStroke.Color = Color3.fromRGB(255, 255, 255)
 MainStroke.Thickness = 2.5
 MainStroke.Parent = MainFrame
 
@@ -103,7 +104,7 @@ TitleLabel.Size = UDim2.new(1, -20, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "⚡ YNW // PANEL"
+TitleLabel.Text = "⚡ YNW // PANEL (PRIVÉ)"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 16
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -156,7 +157,7 @@ local function createTabContent(name)
 	scroller.Position = UDim2.new(0, 72, 0, 50)
 	scroller.BackgroundTransparency = 1
 	scroller.BorderSizePixel = 0
-	scroller.CanvasSize = UDim2.new(0, 0, 0, 420)
+	scroller.CanvasSize = UDim2.new(0, 0, 0, 500)
 	scroller.ScrollBarThickness = 3
 	scroller.Visible = false
 	scroller.Parent = MainFrame
@@ -297,12 +298,95 @@ local function createSlider(parent, name, min, max, default, callback)
 	container.Parent = parent
 end
 
--- Remplissage des options (Indépendantes)
+-- SECTION AIMBOT : Configuration & Interface de sélection de joueurs
 createToggle(aimbotTab, "Aim Lock (Visée)", Config.AimAssist, function(s) Config.AimAssist = s end)
 createToggle(aimbotTab, "Traverser les Murs", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
 createSlider(aimbotTab, "Taille FOV", 50, 400, Config.FOV, function(v) Config.FOV = v end)
 createSlider(aimbotTab, "Smoothness (Vitesse)", 1, 20, Config.Smoothness, function(v) Config.Smoothness = v end)
 
+-- Boîte de sélection dédiée aux joueurs du serveur dans AIM
+local targetSelectorContainer = Instance.new("Frame")
+targetSelectorContainer.Size = UDim2.new(1, 0, 0, 140)
+targetSelectorContainer.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+targetSelectorContainer.BorderSizePixel = 0
+targetSelectorContainer.Parent = aimbotTab
+
+local tsCorner = Instance.new("UICorner")
+tsCorner.CornerRadius = UDim.new(0, 8)
+tsCorner.Parent = targetSelectorContainer
+
+local tsStroke = Instance.new("UIStroke")
+tsStroke.Color = Color3.fromRGB(100, 100, 100)
+tsStroke.Thickness = 1
+tsStroke.Parent = targetSelectorContainer
+
+local tsTitle = Instance.new("TextLabel")
+tsTitle.Size = UDim2.new(1, 0, 0, 25)
+tsTitle.Position = UDim2.new(0, 10, 0, 5)
+tsTitle.BackgroundTransparency = 1
+tsTitle.Font = Enum.Font.GothamBold
+tsTitle.Text = "Sélection de Cible (Serveur)"
+tsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+tsTitle.TextSize = 12
+tsTitle.TextXAlignment = Enum.TextXAlignment.Left
+tsTitle.Parent = targetSelectorContainer
+
+local playerListScroll = Instance.new("ScrollingFrame")
+playerListScroll.Size = UDim2.new(1, -10, 1, -35)
+playerListScroll.Position = UDim2.new(0, 5, 0, 30)
+playerListScroll.BackgroundTransparency = 1
+playerListScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+playerListScroll.ScrollBarThickness = 3
+playerListScroll.Parent = targetSelectorContainer
+
+local plLayout = Instance.new("UIListLayout")
+plLayout.SortOrder = Enum.SortOrder.LayoutOrder
+plLayout.Padding = UDim.new(0, 4)
+plLayout.Parent = playerListScroll
+
+-- Fonction de mise à jour dynamique de la liste des joueurs connectés
+local function updatePlayerListUI()
+	for _, child in ipairs(playerListScroll:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
+	end
+	
+	local count = 0
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			count = count + 1
+			local pBtn = Instance.new("TextButton")
+			pBtn.Size = UDim2.new(1, -10, 0, 24)
+			pBtn.BackgroundColor3 = (Config.SelectedTargetPlayer == player) and Color3.fromRGB(80, 80, 80) or Color3.fromRGB(30, 30, 30)
+			pBtn.Font = Enum.Font.Gotham
+			pBtn.Text = "  [ " .. player.Name .. " ]"
+			pBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			pBtn.TextSize = 11
+			pBtn.TextXAlignment = Enum.TextXAlignment.Left
+			pBtn.Parent = playerListScroll
+			
+			local btnCorner = Instance.new("UICorner")
+			btnCorner.CornerRadius = UDim.new(0, 4)
+			btnCorner.Parent = pBtn
+			
+			pBtn.MouseButton1Click:Connect(function()
+				pcall(function() ClickSound:Play() end)
+				if Config.SelectedTargetPlayer == player then
+					Config.SelectedTargetPlayer = nil -- Désélectionner
+				else
+					Config.SelectedTargetPlayer = player -- Sélectionner spécifiquement ce joueur
+				end
+				updatePlayerListUI()
+			end)
+		end
+	end
+	playerListScroll.CanvasSize = UDim2.new(0, 0, 0, count * 28)
+end
+
+Players.PlayerAdded:Connect(updatePlayerListUI)
+Players.PlayerRemoving:Connect(updatePlayerListUI)
+updatePlayerListUI()
+
+-- SECTION VISUAL
 createToggle(visualTab, "ESP Boîte Vert", Config.ESPBoxes, function(s) Config.ESPBoxes = s end)
 createToggle(visualTab, "Tracers Rouges Clairs", Config.Tracers, function(s) Config.Tracers = s end)
 createToggle(visualTab, "Crosshair Central", Config.Crosshair, function(s) 
@@ -311,227 +395,10 @@ createToggle(visualTab, "Crosshair Central", Config.Crosshair, function(s)
 	CrosshairV.Visible = s
 end)
 
+-- SECTION PLAYER
 createToggle(playerTab, "Infinite Jump", Config.InfiniteJump, function(s) Config.InfiniteJump = s end)
 createToggle(playerTab, "Spinbot (Tourne)", Config.Spin, function(s) Config.Spin = s end)
 createToggle(playerTab, "Fly (Vol)", Config.Fly, function(s) Config.Fly = s end)
 createSlider(playerTab, "Vitesse Fly", 1, 100, Config.FlySpeed, function(v) Config.FlySpeed = v end)
 createToggle(playerTab, "Activer WalkSpeed", Config.WalkSpeedEnabled, function(s) Config.WalkSpeedEnabled = s end)
-createSlider(playerTab, "Valeur WalkSpeed", 16, 150, Config.WalkSpeedValue, function(v) Config.WalkSpeedValue = v end)
-
--- FOV Frame
-local FOVFrame = Instance.new("Frame")
-FOVFrame.BackgroundTransparency = 1
-FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-FOVFrame.Parent = ScreenGui
-
-local FOVStroke = Instance.new("UIStroke")
-FOVStroke.Color = Color3.fromRGB(255, 255, 255)
-FOVStroke.Thickness = 1.5
-FOVStroke.Transparency = 0.4
-FOVStroke.Parent = FOVFrame
-local FOVCorner = Instance.new("UICorner")
-FOVCorner.CornerRadius = UDim.new(1, 0)
-FOVCorner.Parent = FOVFrame
-
--- Tracers collés aux pieds
-local function getTracer(player)
-	if not tracerFrames[player] then
-		local line = Instance.new("Frame")
-		line.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-		line.BackgroundTransparency = 0.3
-		line.BorderSizePixel = 0
-		line.Size = UDim2.new(0, 1.5, 0, 0)
-		line.Visible = false
-		line.Parent = ScreenGui
-		tracerFrames[player] = line
-	end
-	return tracerFrames[player]
-end
-
-Players.PlayerRemoving:Connect(function(player)
-	if tracerFrames[player] then tracerFrames[player]:Destroy() tracerFrames[player] = nil end
-	if highlights[player] then highlights[player]:Destroy() highlights[player] = nil end
-end)
-
--- Événements Entrées
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then
-		isRightMouseDown = true
-	elseif input.KeyCode == Config.ToggleGuiKey then
-		MainFrame.Visible = not MainFrame.Visible
-	elseif Config.InfiniteJump and input.KeyCode == Enum.KeyCode.Space then
-		local char = LocalPlayer.Character
-		local hrp = char and char:FindFirstChild("HumanoidRootPart")
-		if hrp then hrp.Velocity = Vector3.new(hrp.Velocity.X, 50, hrp.Velocity.Z) end
-	end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then
-		isRightMouseDown = false
-		lockedTarget = nil
-	end
-end)
-
--- Recherche de cible sécurisée (Traversée des murs corrigée)
-local function getClosestTarget()
-	local closestPlayer = nil
-	local shortestDistance = Config.FOV
-	local mousePos = UserInputService:GetMouseLocation()
-
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer and player.Character then
-			local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-			local head = player.Character:FindFirstChild("Head")
-			
-			if humanoid and humanoid.Health > 0 and head then
-				local isValid = true
-				
-				-- Vérification de l'obstacle si "Traverser les Murs" est désactivé
-				if not Config.ThroughWalls then
-					local char = LocalPlayer.Character
-					if char and char:FindFirstChild("HumanoidRootPart") then
-						local origin = Camera.CFrame.Position
-						local direction = (head.Position - origin)
-						local raycastParams = RaycastParams.new()
-						raycastParams.FilterDescendantsInstances = {char, player.Character}
-						raycastParams.FilterType = RaycastType.Exclude
-						local result = workspace:Raycast(origin, direction, raycastParams)
-						if result then
-							isValid = false
-						end
-					end
-				end
-				
-				if isValid then
-					local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
-					if onScreen then
-						local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
-						local distance = (screenPos - mousePos).Magnitude
-						
-						if distance < shortestDistance then
-							shortestDistance = distance
-							closestPlayer = head
-						end
-					end
-				end
-			end
-		end
-	end
-	return closestPlayer
-end
-
--- Boucle principale
-RunService.RenderStepped:Connect(function(dt)
-	local mousePos = UserInputService:GetMouseLocation()
-	
-	FOVFrame.Size = UDim2.new(0, Config.FOV * 2, 0, Config.FOV * 2)
-	FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
-	FOVFrame.Visible = true
-
-	CrosshairH.Visible = Config.Crosshair
-	CrosshairV.Visible = Config.Crosshair
-
-	-- Mouvements Joueur
-	local char = LocalPlayer.Character
-	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-	local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-	if char and humanoid and hrp then
-		if Config.WalkSpeedEnabled then humanoid.WalkSpeed = Config.WalkSpeedValue end
-		if Config.Spin then hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(35), 0) end
-
-		if Config.Fly then
-			if not flyBodyVelocity then
-				flyBodyVelocity = Instance.new("BodyVelocity")
-				flyBodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-				flyBodyVelocity.Parent = hrp
-			end
-			if not flyBodyGyro then
-				flyBodyGyro = Instance.new("BodyGyro")
-				flyBodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-				flyBodyGyro.Parent = hrp
-			end
-			
-			local camCFrame = Camera.CFrame
-			local moveDir = Vector3.new()
-			if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCFrame.LookVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCFrame.LookVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCFrame.RightVector end
-			if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCFrame.RightVector end
-			
-			flyBodyVelocity.Velocity = moveDir * (Config.FlySpeed * 1.5)
-			flyBodyGyro.CFrame = camCFrame
-			humanoid.PlatformStand = true
-		else
-			if flyBodyVelocity then flyBodyVelocity:Destroy() flyBodyVelocity = nil end
-			if flyBodyGyro then flyBodyGyro:Destroy() flyBodyGyro = nil end
-			if humanoid.PlatformStand then humanoid.PlatformStand = false end
-		end
-	end
-
-	-- ESP & Tracers
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer then
-			local pChar = player.Character
-			local pHum = pChar and pChar:FindFirstChildOfClass("Humanoid")
-			local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
-			
-			-- ESP Boîte Vert
-			if Config.ESPBoxes and pChar and pHum and pHum.Health > 0 then
-				if not highlights[player] then
-					local hl = Instance.new("Highlight")
-					hl.FillTransparency = 1
-					hl.OutlineColor = Color3.fromRGB(0, 255, 0)
-					hl.OutlineTransparency = 0
-					hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-					hl.Parent = pChar
-					highlights[player] = hl
-				else
-					highlights[player].Parent = pChar
-					highlights[player].Enabled = true
-				end
-			elseif highlights[player] then
-				highlights[player].Enabled = false
-			end
-			
-			-- Tracers collés aux pieds
-			local tracer = getTracer(player)
-			if Config.Tracers and pChar and pRoot and pHum and pHum.Health > 0 then
-				local feetPos3D = pRoot.Position - Vector3.new(0, 3.2, 0)
-				local feetScreenPos, onScreen = Camera:WorldToViewportPoint(feetPos3D)
-				
-				if onScreen then
-					local bottomScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-					local targetScreen = Vector2.new(feetScreenPos.X, feetScreenPos.Y)
-					local dist = (targetScreen - bottomScreen).Magnitude
-					
-					tracer.Size = UDim2.new(0, 1.5, 0, dist)
-					tracer.Position = UDim2.new(0, (bottomScreen.X + targetScreen.X) / 2, 0, (bottomScreen.Y + targetScreen.Y) / 2)
-					tracer.AnchorPoint = Vector2.new(0.5, 0.5)
-					tracer.Rotation = math.deg(math.atan2(targetScreen.Y - bottomScreen.Y, targetScreen.X - bottomScreen.X)) - 90
-					tracer.Visible = true
-				else
-					tracer.Visible = false
-				end
-			else
-				tracer.Visible = false
-			end
-		end
-	end
-
-	-- Aim Lock (Clic droit maintenu)
-	if Config.AimAssist and isRightMouseDown then
-		if not lockedTarget or not lockedTarget.Parent or lockedTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
-			lockedTarget = getClosestTarget()
-		end
-
-		if lockedTarget then
-			local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTarget.Position)
-			local alpha = math.clamp(dt * (22 - Config.Smoothness), 0.05, 1)
-			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
-		end
-	else
-		lockedTarget = nil
-	end
-end)
+createSlider(playerTab, "Valeur
