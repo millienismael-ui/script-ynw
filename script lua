@@ -1,208 +1,273 @@
--- Message de remerciement dans la console de l'exécuteur
-print("==================================================")
-print("  Merci d'utiliser le script Ynw ! Mode direct.    ")
-print("==================================================")
-
+-- Services requis
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Camera = workspace.CurrentCamera
 
-if PlayerGui:FindFirstChild("YnwFuturisticGui") then
-	PlayerGui.YnwFuturisticGui:Destroy()
-end
+-- Paramètres configurables
+local Config = {
+	Enabled = true,
+	AimAssist = true,
+	FOV = 180,
+	Smoothness = 6, -- Plus la valeur est élevée, plus le mouvement est fluide/lent
+	ThroughWalls = true, -- Permet de cibler à travers les murs
+	MenuKey = Enum.KeyCode.RightShift
+}
 
--- 1. Interface UI principale (Design Futuriste Noir & Blanc)
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "YnwFuturisticGui"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = PlayerGui
+-- État interne
+local isRightMouseDown = false
+local lockedTarget = nil
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 240, 0, 310)
-mainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = screenGui
+-- Création de l'interface graphique (GUI)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PrivateTestUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999999 -- Toujours au premier plan
+ScreenGui.Parent = CoreGui
 
-local frameCorner = Instance.new("UICorner")
-frameCorner.CornerRadius = UDim.new(0, 8)
-frameCorner.Parent = mainFrame
+-- Fenêtre principale
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 320, 0, 380)
+MainFrame.Position = UDim2.new(0.5, -160, 0.5, -190)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Visible = true
+MainFrame.Parent = ScreenGui
 
-local frameStroke = Instance.new("UIStroke")
-frameStroke.Color = Color3.fromRGB(255, 255, 255)
-frameStroke.Thickness = 1.5
-frameStroke.Parent = mainFrame
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
 
--- Titre "Ynw"
-local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, 0, 0, 40)
-titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Ynw - Menu"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 18
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.Parent = mainFrame
+-- Barre supérieure (unique moyen de déplacer la fenêtre)
+local TopBar = Instance.new("Frame")
+TopBar.Name = "TopBar"
+TopBar.Size = UDim2.new(1, 0, 0, 40)
+TopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
 
--- ScrollingFrame pour les boutons
-local scrollingFrame = Instance.new("ScrollingFrame")
-scrollingFrame.Size = UDim2.new(1, -16, 1, -55)
-scrollingFrame.Position = UDim2.new(0, 8, 0, 45)
-scrollingFrame.BackgroundTransparency = 1
-scrollingFrame.BorderSizePixel = 0
-scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 250)
-scrollingFrame.ScrollBarThickness = 4
-scrollingFrame.Parent = mainFrame
+local TopBarCorner = Instance.new("UICorner")
+TopBarCorner.CornerRadius = UDim.new(0, 8)
+TopBarCorner.Parent = TopBar
 
-local uiListLayout = Instance.new("UIListLayout")
-uiListLayout.Parent = scrollingFrame
-uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-uiListLayout.Padding = UDim.new(0, 8)
+-- Correction pour garder les coins arrondis uniquement en haut
+local BottomCover = Instance.new("Frame")
+BottomCover.Size = UDim2.new(1, 0, 0, 10)
+BottomCover.Position = UDim2.new(0, 0, 1, -10)
+BottomCover.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+BottomCover.BorderSizePixel = 0
+BottomCover.Parent = TopBar
 
--- Fonction de création des boutons
-local function createButton(text, order)
-	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, -6, 0, 42)
-	btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	btn.TextSize = 13
-	btn.Font = Enum.Font.GothamSemibold
-	btn.Text = text
-	btn.LayoutOrder = order
-	btn.Parent = scrollingFrame
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -20, 1, 0)
+TitleLabel.Position = UDim2.new(0, 10, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "Panel de Test - Privé"
+TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 240)
+TitleLabel.TextSize = 14
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TopBar
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = btn
+-- Logique de déplacement de la fenêtre (uniquement via la TopBar)
+local dragging, dragInput, dragStart, startPos
 
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(200, 200, 200)
-	stroke.Thickness = 1
-	stroke.Parent = btn
-
-	return btn
-end
-
--- Création des 4 boutons fonctionnels
-local btnHelmet = createButton("Spawn Casque 3D", 1)
-local btnSword = createButton("Spawn Épée 3D", 2)
-local btnDance = createButton("Jouer Danse", 3)
-local btnReset = createButton("Reset Avatar", 4)
-
--- Notification en haut à droite
-local notifLabel = Instance.new("TextLabel")
-notifLabel.Size = UDim2.new(0, 210, 0, 35)
-notifLabel.Position = UDim2.new(1, -220, 0, 15)
-notifLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-notifLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-notifLabel.TextSize = 12
-notifLabel.Font = Enum.Font.GothamBold
-notifLabel.Text = "Interface : Active"
-notifLabel.Parent = screenGui
-
-local notifCorner = Instance.new("UICorner")
-notifCorner.CornerRadius = UDim.new(0, 6)
-notifCorner.Parent = notifLabel
-
-local notifStroke = Instance.new("UIStroke")
-notifStroke.Color = Color3.fromRGB(255, 255, 255)
-notifStroke.Thickness = 1
-notifStroke.Parent = notifLabel
-
--- Raccourcis Clavier Alt et M
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
-		mainFrame.Visible = not mainFrame.Visible
-		notifLabel.Text = mainFrame.Visible and "Interface : Active" or "Interface : Masquée"
-	elseif input.KeyCode == Enum.KeyCode.M then
-		mainFrame.Visible = true
-		notifLabel.Text = "Interface : Réaffichée"
+TopBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = MainFrame.Position
+		
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
 	end
 end)
 
--- Variables pour l'orbite
-local spawnedObjects = {}
-local orbitActive = false
-
--- Actions des boutons (génération 3D instantanée visible)
-btnHelmet.MouseButton1Click:Connect(function()
-	local char = LocalPlayer.Character
-	if not char then return end
-	local head = char:FindFirstChild("Head")
-	if not head then return end
-
-	local helmetPart = Instance.new("Part")
-	helmetPart.Size = Vector3.new(1.3, 1.3, 1.3)
-	helmetPart.Color = Color3.fromRGB(200, 0, 0)
-	helmetPart.Material = Enum.Material.Neon
-	helmetPart.CFrame = head.CFrame
-	helmetPart.Parent = workspace
-	
-	table.insert(spawnedObjects, helmetPart)
-	orbitActive = true
+TopBar.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
 end)
 
-btnSword.MouseButton1Click:Connect(function()
-	local char = LocalPlayer.Character
-	if not char then return end
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not hrp then return end
-
-	local blade = Instance.new("Part")
-	blade.Size = Vector3.new(0.4, 4, 0.8)
-	blade.Color = Color3.fromRGB(120, 120, 255)
-	blade.Material = Enum.Material.Glass
-	blade.CFrame = hrp.CFrame + Vector3.new(2, 0, 0)
-	blade.Parent = workspace
-	
-	table.insert(spawnedObjects, blade)
-	orbitActive = true
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		MainFrame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
 end)
 
--- Animation fluide de l'orbite autour de toi
-RunService.Heartbeat:Connect(function()
-	if not orbitActive or #spawnedObjects == 0 then return end
-	local char = LocalPlayer.Character
-	if not char then return end
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not hrp then return end
+-- Conteneur des options
+local ContentContainer = Instance.new("ScrollingFrame")
+ContentContainer.Size = UDim2.new(1, -20, 1, -60)
+ContentContainer.Position = UDim2.new(0, 10, 0, 50)
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.BorderSizePixel = 0
+ContentContainer.CanvasSize = UDim2.new(0, 0, 0, 300)
+ContentContainer.ScrollBarThickness = 4
+ContentContainer.Parent = MainFrame
 
-	local t = tick() * 6
-	local total = #spawnedObjects
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 12)
+UIListLayout.Parent = ContentContainer
 
-	for i, obj in ipairs(spawnedObjects) do
-		if obj and obj.Parent then
-			pcall(function()
-				local angle = t + ((i / total) * (math.pi * 2))
-				local radius = 3.2
-				local pos = hrp.Position + Vector3.new(math.cos(angle) * radius, 1.5, math.sin(angle) * radius)
-				obj.CFrame = CFrame.new(pos) * CFrame.Angles(0, t, 0)
-			end)
+-- Fonction utilitaire pour créer des boutons/toggle stylisés
+local function createToggle(name, defaultState, callback)
+	local container = Instance.new("Frame")
+	container.Size = UDim2.new(1, 0, 0, 35)
+	container.BackgroundTransparency = 1
+	
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(0.7, 0, 1, 0)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamMedium
+	label.Text = name
+	label.TextColor3 = Color3.fromRGB(200, 200, 200)
+	label.TextSize = 13
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = container
+	
+	local button = Instance.new("TextButton")
+	button.Size = UDim2.new(0, 50, 0, 24)
+	button.Position = UDim2.new(1, -50, 0.5, -12)
+	button.BackgroundColor3 = defaultState and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(60, 60, 70)
+	button.AutoButtonColor = false
+	button.Text = ""
+	button.Parent = container
+	
+	local btnCorner = Instance.new("UICorner")
+	btnCorner.CornerRadius = UDim.new(1, 0)
+	btnCorner.Parent = button
+	
+	local state = defaultState
+	button.MouseButton1Click:Connect(function()
+		state = not state
+		button.BackgroundColor3 = state and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(60, 60, 70)
+		callback(state)
+	end)
+	
+	container.Parent = ContentContainer
+end
+
+-- Création des éléments de l'UI
+createToggle("Activer le Script", Config.Enabled, function(state)
+	Config.Enabled = state
+end)
+
+createToggle("Aide à la Visée (Aim Lock)", Config.AimAssist, function(state)
+	Config.AimAssist = state
+end)
+
+createToggle("Traverser les Murs (Wall Check off)", Config.ThroughWalls, function(state)
+	Config.ThroughWalls = state
+end)
+
+-- Cercle FOV visuel à l'écran
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = true
+FOVCircle.Thickness = 1
+FOVCircle.NumSides = 64
+FOVCircle.Radius = Config.FOV
+FOVCircle.Filled = false
+FOVCircle.Color = Color3.fromRGB(255, 255, 255)
+FOVCircle.Transparency = 0.7
+
+-- Gestion du clic droit de la souris
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isRightMouseDown = true
+	elseif input.KeyCode == Config.MenuKey then
+		MainFrame.Visible = not MainFrame.Visible
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton2 then
+		isRightMouseDown = false
+		lockedTarget = nil
+	end
+end)
+
+-- Fonction de recherche de la cible la plus proche (visant la tête / Head)
+local function getClosestTarget()
+	local closestPlayer = nil
+	local shortestDistance = Config.FOV
+
+	local mousePos = UserInputService:GetMouseLocation()
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+			local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+			local head = player.Character:FindFirstChild("Head")
+			
+			if humanoid and humanoid.Health > 0 and head then
+				-- Vérification optionnelle des murs (Raycast) si demandé désactivée
+				local isValid = true
+				if not Config.ThroughWalls then
+					local origin = Camera.CFrame.Position
+					local direction = (head.Position - origin).Unit * (head.Position - origin).Magnitude
+					local raycastParams = RaycastParams.new()
+					raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+					raycastParams.FilterType = RaycastType.Exclude
+					
+					local result = workspace:Raycast(origin, direction, raycastParams)
+					if result and result.Instance:IsDescendantOf(player.Character) == false then
+						isValid = false
+					end
+				end
+				
+				if isValid then
+					local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
+					if onScreen then
+						local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
+						local distance = (screenPos - mousePos).Magnitude
+						
+						if distance < shortestDistance then
+							shortestDistance = distance
+							closestPlayer = head
+						end
+					end
+				end
+			end
 		end
 	end
-end)
 
--- Bouton Danse (ID d'animation fonctionnel)
-btnDance.MouseButton1Click:Connect(function()
-	pcall(function()
-		local char = LocalPlayer.Character
-		if not char then return end
-		local humanoid = char:FindFirstChildOfClass("Humanoid")
-		if not humanoid then return end
-		
-		local anim = Instance.new("Animation")
-		anim.AnimationId = "rbxassetid://127517106825603"
-		local track = humanoid:LoadAnimation(anim)
-		track:Play()
-	end)
-end)
+	return closestPlayer
+end
 
--- Bouton Reset
-btnReset.MouseButton1Click:Connect(function()
-	spawnedObjects = {}
-	orbitActive = false
-	if LocalPlayer.Character then
-		LocalPlayer.Character:BreakJoints()
+-- Boucle principale de mise à jour (RenderStepped)
+RunService.RenderStepped:Connect(function()
+	local mousePos = UserInputService:GetMouseLocation()
+	FOVCircle.Position = mousePos
+	FOVCircle.Radius = Config.FOV
+	FOVCircle.Visible = Config.Enabled
+
+	if not Config.Enabled then return end
+
+	-- Gestion du verrouillage par maintien du clic droit
+	if Config.AimAssist and isRightMouseDown then
+		if not lockedTarget or not lockedTarget.Parent or lockedTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
+			lockedTarget = getClosestTarget()
+		end
+
+		if lockedTarget then
+			-- Calcul du lissage de la caméra vers la tête de la cible
+			local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTarget.Position)
+			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, 1 / Config.Smoothness)
+		end
+	else
+		lockedTarget = nil
 	end
 end)
