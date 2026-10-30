@@ -30,13 +30,14 @@ local Config = {
 	-- Settings / Anti-Lag
 	AntiLag = false,
 	
-	ToggleGuiKey = Enum.KeyCode.H -- Changé sur la touche H
+	ToggleGuiKey = Enum.KeyCode.H -- Touche H
 }
 
 -- État interne
 local highlights = {}
 local tracerFrames = {}
 local flyBodyVelocity, flyBodyGyro
+local currentLockedTargetPart = nil -- Variable de verrouillage continu
 
 -- Son de clic
 local ClickSound = Instance.new("Sound")
@@ -88,7 +89,7 @@ TitleLabel.Size = UDim2.new(1, -20, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "⚡ YNW // RIVALS PANEL (OPTIMISÉ)"
+TitleLabel.Text = "⚡ YNW // RIVALS PANEL (LOCK FIX)"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 15
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -285,7 +286,10 @@ local function createSlider(parent, name, min, max, default, callback)
 end
 
 -- Configuration AIM
-createToggle(aimbotTab, "Aimbot Auto (FOV)", Config.AimAssist, function(s) Config.AimAssist = s end)
+createToggle(aimbotTab, "Aimbot Auto (FOV)", Config.AimAssist, function(s) 
+	Config.AimAssist = s 
+	if not s then currentLockedTargetPart = nil end
+end)
 createToggle(aimbotTab, "Traverser les Murs & Balles", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
 createSlider(aimbotTab, "Taille FOV", 1, 200, Config.FOV, function(v) Config.FOV = v end)
 createSlider(aimbotTab, "Smoothness (Vitesse)", 1, 20, Config.Smoothness, function(v) Config.Smoothness = v end)
@@ -352,8 +356,10 @@ local function updatePlayerListUI()
 				pcall(function() ClickSound:Play() end)
 				if Config.SelectedTargetPlayer == player then
 					Config.SelectedTargetPlayer = nil
+					currentLockedTargetPart = nil
 				else
 					Config.SelectedTargetPlayer = player
+					currentLockedTargetPart = nil
 				end
 				updatePlayerListUI()
 			end)
@@ -378,7 +384,7 @@ createSlider(playerTab, "Vitesse Fly", 1, 100, Config.FlySpeed, function(v) Conf
 createToggle(playerTab, "Activer WalkSpeed", Config.WalkSpeedEnabled, function(s) Config.WalkSpeedEnabled = s end)
 createSlider(playerTab, "Valeur WalkSpeed", 16, 150, Config.WalkSpeedValue, function(v) Config.WalkSpeedValue = v end)
 
--- Options SETTINGS (Anti-Lag / Réduction de textures en SmoothPlastic et suppression des ombres)
+-- Options SETTINGS (Anti-Lag / SmoothPlastic)
 createToggle(settingsTab, "Anti-Lag & FPS Boost (SmoothPlastic)", Config.AntiLag, function(s)
 	Config.AntiLag = s
 	if s then
@@ -445,6 +451,9 @@ Players.PlayerRemoving:Connect(function(player)
 	if tracerFrames[player] then tracerFrames[player]:Destroy() tracerFrames[player] = nil end
 	if highlights[player] then highlights[player]:Destroy() highlights[player] = nil end
 	if Config.SelectedTargetPlayer == player then Config.SelectedTargetPlayer = nil end
+	if currentLockedTargetPart and currentLockedTargetPart:IsDescendantOf(player.Character) then
+		currentLockedTargetPart = nil
+	end
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -457,13 +466,28 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
--- Fonction de recherche de cible strictement alignée au centre exact de l'écran (Crosshair Rivals)
+-- Recherche de cible avec maintien du verrouillage continu (Aim Lock absolu)
 local function getClosestTarget()
+	-- 1. Si une cible manuelle est sélectionnée
 	if Config.SelectedTargetPlayer and Config.SelectedTargetPlayer.Character then
 		local targetPart = getTargetPart(Config.SelectedTargetPlayer.Character)
 		if targetPart then return targetPart end
 	end
 
+	-- 2. Verrouillage continu : si la cible actuelle est toujours valide et visible dans le monde
+	if currentLockedTargetPart and currentLockedTargetPart.Parent and currentLockedTargetPart:IsDescendantOf(workspace) then
+		local screenPoint, onScreen = Camera:WorldToViewportPoint(currentLockedTargetPart.Position)
+		local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+		local fovRadius = Config.FOV * 3.5
+		local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
+		
+		-- Reste verrouillé même si la caméra bouge, tant que le joueur est encore proche de la FOV
+		if onScreen and distance <= (fovRadius * 1.5) then
+			return currentLockedTargetPart
+		end
+	end
+
+	-- 3. Sinon, cherche un nouveau joueur le plus proche du centre du crosshair
 	local closestPart = nil
 	local fovRadius = Config.FOV * 3
 	local shortestDistance = fovRadius
@@ -501,6 +525,8 @@ local function getClosestTarget()
 			end
 		end
 	end
+	
+	currentLockedTargetPart = closestPart
 	return closestPart
 end
 
@@ -522,7 +548,7 @@ end)
 
 -- Boucle principale de rendu
 RunService.RenderStepped:Connect(function(dt)
-	-- Fix absolu : Le cercle de la FOV est positionné exactement au centre de l'écran du jeu
+	-- Cercle de FOV ancré au centre exact de l'écran (Crosshair Rivals)
 	FOVFrame.Size = UDim2.new(0, Config.FOV * 6, 0, Config.FOV * 6)
 	FOVFrame.Position = UDim2.new(0, Camera.ViewportSize.X / 2, 0, Camera.ViewportSize.Y / 2)
 	FOVFrame.Visible = Config.AimAssist
@@ -612,12 +638,12 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- Aimbot automatique centré sur le crosshair natif
+	-- Aimbot continu : verrouillage de la caméra sans décrocher
 	if Config.AimAssist then
 		local currentTarget = getClosestTarget()
 		if currentTarget then
 			local targetCFrame = CFrame.new(Camera.CFrame.Position, currentTarget.Position)
-			local alpha = math.clamp(dt * (24 - Config.Smoothness), 0.05, 1)
+			local alpha = math.clamp(dt * (26 - Config.Smoothness), 0.1, 1)
 			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
 		end
 	end
