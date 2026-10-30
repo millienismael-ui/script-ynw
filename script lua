@@ -12,43 +12,41 @@ local Camera = workspace.CurrentCamera
 local Config = {
 	Enabled = true,
 	AimAssist = true,
-	FOV = 180,
+	FOV = 150,
 	Smoothness = 6,
 	ThroughWalls = true,
 	Tracers = true,
 	ESPBoxes = true,
-	MenuKey = Enum.KeyCode.RightShift
+	MenuKey = Enum.KeyCode.RightShift,
+	ToggleGuiKey = Enum.KeyCode.LeftControl
 }
 
 -- État interne
 local isRightMouseDown = false
 local lockedTarget = nil
+local highlights = {}
+local tracerFrames = {}
 
--- Création du son de clic (ID : 140910211)
+-- Son de clic amplifié (ID : 140910211)
 local ClickSound = Instance.new("Sound")
 ClickSound.SoundId = "rbxassetid://140910211"
 ClickSound.Volume = 1.5
 ClickSound.Parent = SoundService
 
--- Interface Principale (GUI)
+-- Interface principale (GUI)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "YnwPrivateUI"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.DisplayOrder = 999999
 
--- Support sécurisé du Parent (CoreGui ou PlayerGui)
-local success, _ = pcall(function()
-	ScreenGui.Parent = CoreGui
-end)
-if not success then
-	ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
+local success, _ = pcall(function() ScreenGui.Parent = CoreGui end)
+if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
 -- Fenêtre principale
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 340, 0, 440)
-MainFrame.Position = UDim2.new(0.5, -170, 0.5, -220)
+MainFrame.Size = UDim2.new(0, 420, 0, 360)
+MainFrame.Position = UDim2.new(0.5, -210, 0.5, -180)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
 MainFrame.BorderSizePixel = 0
 MainFrame.Parent = ScreenGui
@@ -63,10 +61,9 @@ MainStroke.Thickness = 1.5
 MainStroke.Transparency = 0.3
 MainStroke.Parent = MainFrame
 
--- TopBar (Déplacement)
+-- Barre supérieure (Déplacement)
 local TopBar = Instance.new("Frame")
-TopBar.Name = "TopBar"
-TopBar.Size = UDim2.new(1, 0, 0, 45)
+TopBar.Size = UDim2.new(1, 0, 0, 40)
 TopBar.BackgroundColor3 = Color3.fromRGB(22, 22, 35)
 TopBar.BorderSizePixel = 0
 TopBar.Parent = MainFrame
@@ -86,77 +83,114 @@ TitleLabel.TextSize = 16
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TopBar
 
--- Déplacement de l'UI
+-- Déplacement de la fenêtre
 local dragging, dragInput, dragStart, startPos
 TopBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = true
 		dragStart = input.Position
 		startPos = MainFrame.Position
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then dragging = false end
-		end)
 	end
 end)
-
-TopBar.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		dragInput = input
-	end
-end)
-
 UserInputService.InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 		local delta = input.Position - dragStart
 		MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 	end
 end)
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
 
--- Conteneur du menu
-local ContentContainer = Instance.new("ScrollingFrame")
-ContentContainer.Size = UDim2.new(1, -20, 1, -65)
-ContentContainer.Position = UDim2.new(0, 10, 0, 55)
-ContentContainer.BackgroundTransparency = 1
-ContentContainer.BorderSizePixel = 0
-ContentContainer.CanvasSize = UDim2.new(0, 0, 0, 400)
-ContentContainer.ScrollBarThickness = 3
-ContentContainer.Parent = MainFrame
+-- Barre latérale (Sidebar avec les icônes demandées)
+local Sidebar = Instance.new("Frame")
+Sidebar.Size = UDim2.new(0, 60, 1, -40)
+Sidebar.Position = UDim2.new(0, 0, 0, 40)
+Sidebar.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+Sidebar.BorderSizePixel = 0
+Sidebar.Parent = MainFrame
 
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 10)
-UIListLayout.Parent = ContentContainer
+local UIListSidebar = Instance.new("UIListLayout")
+UIListSidebar.HorizontalAlignment = Enum.HorizontalAlignment.Center
+UIListSidebar.VerticalAlignment = Enum.VerticalAlignment.Top
+UIListSidebar.Padding = UDim.new(0, 15)
+UIListSidebar.SortOrder = Enum.SortOrder.LayoutOrder
+UIListSidebar.Parent = Sidebar
 
-local function createCategoryHeader(titleText)
-	local header = Instance.new("TextLabel")
-	header.Size = UDim2.new(1, 0, 0, 28)
-	header.BackgroundTransparency = 1
-	header.Font = Enum.Font.GothamBold
-	header.Text = titleText
-	header.TextColor3 = Color3.fromRGB(0, 229, 255)
-	header.TextSize = 13
-	header.TextXAlignment = Enum.TextXAlignment.Left
-	header.Parent = ContentContainer
+local UICornerSide = Instance.new("UICorner")
+UICornerSide.CornerRadius = UDim.new(0, 10)
+UICornerSide.Parent = Sidebar
+
+-- Conteneurs des onglets
+local Containers = {}
+
+local function createTabContent(name)
+	local scroller = Instance.new("ScrollingFrame")
+	scroller.Size = UDim2.new(1, -75, 1, -55)
+	scroller.Position = UDim2.new(0, 70, 0, 48)
+	scroller.BackgroundTransparency = 1
+	scroller.BorderSizePixel = 0
+	scroller.CanvasSize = UDim2.new(0, 0, 0, 350)
+	scroller.ScrollBarThickness = 3
+	scroller.Visible = false
+	scroller.Parent = MainFrame
+	
+	local layout = Instance.new("UIListLayout")
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 10)
+	layout.Parent = scroller
+	
+	Containers[name] = scroller
+	return scroller
 end
 
-local function createToggle(name, defaultState, callback)
+local aimbotTab = createTabContent("Aimbot")
+local visualTab = createTabContent("Visual")
+
+-- Création des boutons de la Sidebar avec les ID d'images exacts
+local function createSidebarButton(iconId, targetTab)
+	local btn = Instance.new("ImageButton")
+	btn.Size = UDim2.new(0, 40, 0, 40)
+	btn.BackgroundColor3 = Color3.fromRGB(25, 25, 38)
+	btn.Image = "rbxassetid://" .. iconId
+	btn.ScaleType = Enum.ScaleType.Fit
+	btn.Parent = Sidebar
+	
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = btn
+	
+	btn.MouseButton1Click:Connect(function()
+		pcall(function() ClickSound:Play() end)
+		for _, tab in pairs(Containers) do tab.Visible = false end
+		targetTab.Visible = true
+	end)
+end
+
+-- ID 1 : Aimbot (87703236742991) | ID 2 : ESP / Visual (106554444170881)
+createSidebarButton("87703236742991", aimbotTab)
+createSidebarButton("106554444170881", visualTab)
+aimbotTab.Visible = true -- Onglet par défaut
+
+-- Fonctions d'interface (Toggles et Sliders)
+local function createToggle(parent, name, defaultState, callback)
 	local container = Instance.new("Frame")
-	container.Size = UDim2.new(1, 0, 0, 36)
+	container.Size = UDim2.new(1, 0, 0, 32)
 	container.BackgroundTransparency = 1
 	
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(0.68, 0, 1, 0)
+	label.Size = UDim2.new(0.65, 0, 1, 0)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.Gotham
 	label.Text = name
 	label.TextColor3 = Color3.fromRGB(210, 210, 230)
-	label.TextSize = 13
+	label.TextSize = 12
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = container
 	
 	local button = Instance.new("TextButton")
-	button.Size = UDim2.new(0, 56, 0, 26)
-	button.Position = UDim2.new(1, -56, 0.5, -13)
+	button.Size = UDim2.new(0, 48, 0, 22)
+	button.Position = UDim2.new(1, -48, 0.5, -11)
 	button.BackgroundColor3 = defaultState and Color3.fromRGB(0, 229, 255) or Color3.fromRGB(35, 35, 50)
 	button.AutoButtonColor = false
 	button.Text = ""
@@ -166,81 +200,126 @@ local function createToggle(name, defaultState, callback)
 	btnCorner.CornerRadius = UDim.new(0, 6)
 	btnCorner.Parent = button
 
-	local btnStroke = Instance.new("UIStroke")
-	btnStroke.Color = defaultState and Color3.fromRGB(150, 245, 255) or Color3.fromRGB(60, 60, 85)
-	btnStroke.Transparency = 0.2
-	btnStroke.Parent = button
-	
 	local state = defaultState
 	button.MouseButton1Click:Connect(function()
 		state = not state
 		pcall(function() ClickSound:Play() end)
 		button.BackgroundColor3 = state and Color3.fromRGB(0, 229, 255) or Color3.fromRGB(35, 35, 50)
-		btnStroke.Color = state and Color3.fromRGB(150, 245, 255) or Color3.fromRGB(60, 60, 85)
 		callback(state)
 	end)
-	
-	container.Parent = ContentContainer
+	container.Parent = parent
 end
 
--- Menu d'options
-createCategoryHeader("--- AIMBOT ---")
-createToggle("Activer le Script", Config.Enabled, function(state) Config.Enabled = state end)
-createToggle("Aide à la Visée (Aim Lock)", Config.AimAssist, function(state) Config.AimAssist = state end)
-createToggle("Traverser les Murs", Config.ThroughWalls, function(state) Config.ThroughWalls = state end)
+local function createSlider(parent, name, min, max, default, callback)
+	local container = Instance.new("Frame")
+	container.Size = UDim2.new(1, 0, 0, 45)
+	container.BackgroundTransparency = 1
+	
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 0, 20)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.Gotham
+	label.Text = name .. " : " .. default
+	label.TextColor3 = Color3.fromRGB(210, 210, 230)
+	label.TextSize = 12
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = container
+	
+	local sliderBar = Instance.new("Frame")
+	sliderBar.Size = UDim2.new(1, 0, 0, 6)
+	sliderBar.Position = UDim2.new(0, 0, 0, 28)
+	sliderBar.BackgroundColor3 = Color3.fromRGB(35, 35, 50)
+	sliderBar.BorderSizePixel = 0
+	sliderBar.Parent = container
+	
+	local barCorner = Instance.new("UICorner")
+	barCorner.CornerRadius = UDim.new(1, 0)
+	barCorner.Parent = sliderBar
+	
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.new((default - min)/(max - min), 0, 1, 0)
+	fill.BackgroundColor3 = Color3.fromRGB(0, 229, 255)
+	fill.BorderSizePixel = 0
+	fill.Parent = sliderBar
+	
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(1, 0)
+	fillCorner.Parent = fill
+	
+	local draggingSlider = false
+	sliderBar.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingSlider = true end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingSlider = false end
+	end)
+	UserInputService.InputChanged:Connect(function(input)
+		if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local pos = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
+			local val = math.floor(min + (max - min) * pos)
+			fill.Size = UDim2.new(pos, 0, 1, 0)
+			label.Text = name .. " : " .. val
+			callback(val)
+		end
+	end)
+	container.Parent = parent
+end
 
-createCategoryHeader("--- VISUAL ---")
-createToggle("ESP Boîte Vert", Config.ESPBoxes, function(state) Config.ESPBoxes = state end)
-createToggle("Tracers Rouges", Config.Tracers, function(state) Config.Tracers = state end)
+-- Remplissage des onglets
+createToggle(aimbotTab, "Activer le Script", Config.Enabled, function(s) Config.Enabled = s end)
+createToggle(aimbotTab, "Aim Lock (Visée)", Config.AimAssist, function(s) Config.AimAssist = s end)
+createToggle(aimbotTab, "Traverser les Murs", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
+createSlider(aimbotTab, "Taille FOV", 50, 400, Config.FOV, function(v) Config.FOV = v end)
+createSlider(aimbotTab, "Smoothness (Vitesse)", 1, 20, Config.Smoothness, function(v) Config.Smoothness = v end)
 
--- FOV visuel (Utilise des Frame natifs au lieu de Drawing)
+createToggle(visualTab, "ESP Boîte / Highlight", Config.ESPBoxes, function(s) Config.ESPBoxes = s end)
+createToggle(visualTab, "Tracers Rouges", Config.Tracers, function(s) Config.Tracers = s end)
+
+-- Cercle FOV natif
 local FOVFrame = Instance.new("Frame")
 FOVFrame.BackgroundTransparency = 1
 FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 FOVFrame.Parent = ScreenGui
-
-local FOVCorner = Instance.new("UICorner")
-FOVCorner.CornerRadius = UDim.new(1, 0)
-FOVCorner.Parent = FOVFrame
 
 local FOVStroke = Instance.new("UIStroke")
 FOVStroke.Color = Color3.fromRGB(0, 229, 255)
 FOVStroke.Thickness = 1.2
 FOVStroke.Transparency = 0.5
 FOVStroke.Parent = FOVFrame
+local FOVCorner = Instance.new("UICorner")
+FOVCorner.CornerRadius = UDim.new(1, 0)
+FOVCorner.Parent = FOVFrame
 
--- Tracers et ESP (Gestion via Highlight/GUI natifs)
-local highlights = {}
-
-local function updateESP()
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer then
-			if Config.Enabled and Config.ESPBoxes and player.Character then
-				if not highlights[player] then
-					local hl = Instance.new("Highlight")
-					hl.Name = "YNW_ESP"
-					hl.FillTransparency = 1
-					hl.OutlineColor = Color3.fromRGB(0, 255, 0) -- Vert
-					hl.OutlineTransparency = 0
-					hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-					hl.Parent = player.Character
-					highlights[player] = hl
-				else
-					highlights[player].Parent = player.Character
-					highlights[player].Enabled = true
-				end
-			elseif highlights[player] then
-				highlights[player].Enabled = false
-			end
-		end
+-- Tracers natifs (lignes avec des frames)
+local function getTracer(player)
+	if not tracerFrames[player] then
+		local line = Instance.new("Frame")
+		line.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+		line.BorderSizePixel = 0
+		line.Size = UDim2.new(0, 1, 0, 0)
+		line.Visible = false
+		line.Parent = ScreenGui
+		tracerFrames[player] = line
 	end
+	return tracerFrames[player]
 end
 
--- Raccourcis et Entrées
+Players.PlayerRemoving:Connect(function(player)
+	if tracerFrames[player] then
+		tracerFrames[player]:Destroy()
+		tracerFrames[player] = nil
+	end
+	if highlights[player] then
+		highlights[player]:Destroy()
+		highlights[player] = nil
+	end
+end)
+
+-- Gestion des touches (Cible et Clavier)
 UserInputService.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton2 then
 		isRightMouseDown = true
-	elseif input.KeyCode == Config.MenuKey then
+	elseif input.KeyCode == Config.ToggleGuiKey then
 		MainFrame.Visible = not MainFrame.Visible
 	end
 end)
@@ -252,7 +331,7 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- Recherche de la cible la plus proche (Tête / Head)
+-- Recherche de cible (Tête / Head) avec gestion corrigée du traverser les murs
 local function getClosestTarget()
 	local closestPlayer = nil
 	local shortestDistance = Config.FOV
@@ -265,16 +344,16 @@ local function getClosestTarget()
 			
 			if humanoid and humanoid.Health > 0 and head then
 				local isValid = true
+				-- Si "Traverser les Murs" est désactivé, on fait un Raycast de vérification
 				if not Config.ThroughWalls then
 					local origin = Camera.CFrame.Position
-					local direction = (head.Position - origin).Unit * (head.Position - origin).Magnitude
+					local direction = (head.Position - origin)
 					local raycastParams = RaycastParams.new()
-					raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+					raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
 					raycastParams.FilterType = RaycastType.Exclude
-					
 					local result = workspace:Raycast(origin, direction, raycastParams)
-					if result and not result.Instance:IsDescendantOf(player.Character) then
-						isValid = false
+					if result then
+						isValid = false -- Obstacle détecté
 					end
 				end
 				
@@ -293,11 +372,10 @@ local function getClosestTarget()
 			end
 		end
 	end
-
 	return closestPlayer
 end
 
--- Boucle de rendu
+-- Boucle de rendu principale
 RunService.RenderStepped:Connect(function()
 	local mousePos = UserInputService:GetMouseLocation()
 	
@@ -306,10 +384,55 @@ RunService.RenderStepped:Connect(function()
 	FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
 	FOVFrame.Visible = Config.Enabled
 
-	-- Mise à jour de l'ESP
-	updateESP()
+	-- Gestion ESP et Tracers
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			local char = player.Character
+			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+			local rootPart = char and char:FindFirstChild("HumanoidRootPart")
+			
+			-- ESP Boîte / Highlight vert
+			if Config.Enabled and Config.ESPBoxes and char and humanoid and humanoid.Health > 0 then
+				if not highlights[player] then
+					local hl = Instance.new("Highlight")
+					hl.FillTransparency = 1
+					hl.OutlineColor = Color3.fromRGB(0, 255, 0)
+					hl.OutlineTransparency = 0
+					hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+					hl.Parent = char
+					highlights[player] = hl
+				else
+					highlights[player].Parent = char
+					highlights[player].Enabled = true
+				end
+			elseif highlights[player] then
+				highlights[player].Enabled = false
+			end
+			
+			-- Tracers Rouges
+			local tracer = getTracer(player)
+			if Config.Enabled and Config.Tracers and char and rootPart and humanoid and humanoid.Health > 0 then
+				local rootScreenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+				if onScreen then
+					local bottomScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+					local targetScreen = Vector2.new(rootScreenPos.X, rootScreenPos.Y)
+					local dist = (targetScreen - bottomScreen).Magnitude
+					
+					tracer.Size = UDim2.new(0, 1.5, 0, dist)
+					tracer.Position = UDim2.new(0, (bottomScreen.X + targetScreen.X) / 2, 0, (bottomScreen.Y + targetScreen.Y) / 2)
+					tracer.AnchorPoint = Vector2.new(0.5, 0.5)
+					tracer.Rotation = math.deg(math.atan2(targetScreen.Y - bottomScreen.Y, targetScreen.X - bottomScreen.X)) - 90
+					tracer.Visible = true
+				else
+					tracer.Visible = false
+				end
+			else
+				tracer.Visible = false
+			end
+		end
+	end
 
-	-- Aim Lock (Tête)
+	-- Logique Aim Lock (Maintien clic droit)
 	if Config.Enabled and Config.AimAssist and isRightMouseDown then
 		if not lockedTarget or not lockedTarget.Parent or lockedTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
 			lockedTarget = getClosestTarget()
