@@ -1,6 +1,6 @@
 -- Message de remerciement dans la console de l'exécuteur
 print("==================================================")
-print("  Merci d'utiliser le script Ynw ! Bon jeu à toi.  ")
+print("  Merci d'utiliser le script Ynw ! Mode direct.    ")
 print("==================================================")
 
 local Players = game:GetService("Players")
@@ -85,8 +85,8 @@ local function createButton(text, order)
 end
 
 -- Création des 4 boutons fonctionnels
-local btnHelmet = createButton("Spawn Casque", 1)
-local btnSword = createButton("Spawn Épée", 2)
+local btnHelmet = createButton("Spawn Casque 3D", 1)
+local btnSword = createButton("Spawn Épée 3D", 2)
 local btnDance = createButton("Jouer Danse", 3)
 local btnReset = createButton("Reset Avatar", 4)
 
@@ -98,7 +98,7 @@ notifLabel.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 notifLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 notifLabel.TextSize = 12
 notifLabel.Font = Enum.Font.GothamBold
-notifLabel.Text = "Interface : Affichée"
+notifLabel.Text = "Interface : Active"
 notifLabel.Parent = screenGui
 
 local notifCorner = Instance.new("UICorner")
@@ -114,28 +114,27 @@ notifStroke.Parent = notifLabel
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
 		mainFrame.Visible = not mainFrame.Visible
-		notifLabel.Text = mainFrame.Visible and "Interface : Affichée" | "Interface : Masquée"
+		notifLabel.Text = mainFrame.Visible and "Interface : Active" or "Interface : Masquée"
 	elseif input.KeyCode == Enum.KeyCode.M then
 		mainFrame.Visible = true
 		notifLabel.Text = "Interface : Réaffichée"
 	end
 end)
 
--- Variables pour l'orbite des objets créés
+-- Variables pour l'orbite
 local spawnedObjects = {}
 local orbitActive = false
 
--- 2. Système de génération directe (contourne le blocage de LoadAsset)
+-- Actions des boutons (génération 3D instantanée visible)
 btnHelmet.MouseButton1Click:Connect(function()
 	local char = LocalPlayer.Character
 	if not char then return end
 	local head = char:FindFirstChild("Head")
 	if not head then return end
 
-	-- Création d'un casque visuel 3D rouge sang
 	local helmetPart = Instance.new("Part")
-	helmetPart.Size = Vector3.new(1.2, 1.2, 1.2)
-	helmetPart.Color = Color3.fromRGB(180, 0, 0)
+	helmetPart.Size = Vector3.new(1.3, 1.3, 1.3)
+	helmetPart.Color = Color3.fromRGB(200, 0, 0)
 	helmetPart.Material = Enum.Material.Neon
 	helmetPart.CFrame = head.CFrame
 	helmetPart.Parent = workspace
@@ -150,11 +149,9 @@ btnSword.MouseButton1Click:Connect(function()
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	-- Création d'une épée visuelle 3D futuriste
-	print("Spawn Épée")
 	local blade = Instance.new("Part")
-	blade.Size = Vector3.new(0.4, 3.5, 0.8)
-	blade.Color = Color3.fromRGB(100, 100, 255)
+	blade.Size = Vector3.new(0.4, 4, 0.8)
+	blade.Color = Color3.fromRGB(120, 120, 255)
 	blade.Material = Enum.Material.Glass
 	blade.CFrame = hrp.CFrame + Vector3.new(2, 0, 0)
 	blade.Parent = workspace
@@ -163,7 +160,7 @@ btnSword.MouseButton1Click:Connect(function()
 	orbitActive = true
 end)
 
--- Animation de rotation automatique en orbite
+-- Animation fluide de l'orbite autour de toi
 RunService.Heartbeat:Connect(function()
 	if not orbitActive or #spawnedObjects == 0 then return end
 	local char = LocalPlayer.Character
@@ -178,7 +175,7 @@ RunService.Heartbeat:Connect(function()
 		if obj and obj.Parent then
 			pcall(function()
 				local angle = t + ((i / total) * (math.pi * 2))
-				local radius = 3
+				local radius = 3.2
 				local pos = hrp.Position + Vector3.new(math.cos(angle) * radius, 1.5, math.sin(angle) * radius)
 				obj.CFrame = CFrame.new(pos) * CFrame.Angles(0, t, 0)
 			end)
@@ -186,7 +183,7 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
--- Bouton Danse (ID officiel)
+-- Bouton Danse (ID d'animation fonctionnel)
 btnDance.MouseButton1Click:Connect(function()
 	pcall(function()
 		local char = LocalPlayer.Character
