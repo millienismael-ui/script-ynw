@@ -8,13 +8,12 @@ local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Paramètres configurables
+-- Paramètres configurables (Indépendants)
 local Config = {
-	Enabled = true,
 	AimAssist = true,
 	FOV = 150,
 	Smoothness = 6,
-	ThroughWalls = true, -- Permet de cibler à travers les murs
+	ThroughWalls = true,
 	Tracers = true,
 	ESPBoxes = true,
 	Crosshair = true,
@@ -69,7 +68,7 @@ CrosshairV.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 CrosshairV.BorderSizePixel = 0
 CrosshairV.Parent = ScreenGui
 
--- Fenêtre principale (Noir & Blanc)
+-- Fenêtre principale (Thème Noir & Blanc)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 440, 0, 400)
@@ -298,8 +297,7 @@ local function createSlider(parent, name, min, max, default, callback)
 	container.Parent = parent
 end
 
--- Remplissage des options
-createToggle(aimbotTab, "Activer le Script", Config.Enabled, function(s) Config.Enabled = s end)
+-- Remplissage des options (Indépendantes)
 createToggle(aimbotTab, "Aim Lock (Visée)", Config.AimAssist, function(s) Config.AimAssist = s end)
 createToggle(aimbotTab, "Traverser les Murs", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
 createSlider(aimbotTab, "Taille FOV", 50, 400, Config.FOV, function(v) Config.FOV = v end)
@@ -335,7 +333,7 @@ local FOVCorner = Instance.new("UICorner")
 FOVCorner.CornerRadius = UDim.new(1, 0)
 FOVCorner.Parent = FOVFrame
 
--- Tracers collés exactement aux pieds
+-- Tracers collés aux pieds
 local function getTracer(player)
 	if not tracerFrames[player] then
 		local line = Instance.new("Frame")
@@ -375,7 +373,7 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- Fonction de recherche de cible (Logique Traverser les Murs corrigée)
+-- Recherche de cible sécurisée (Traversée des murs corrigée)
 local function getClosestTarget()
 	local closestPlayer = nil
 	local shortestDistance = Config.FOV
@@ -389,16 +387,19 @@ local function getClosestTarget()
 			if humanoid and humanoid.Health > 0 and head then
 				local isValid = true
 				
-				-- Seulement si "Traverser les Murs" est DÉSACTIVÉ, on applique le test Raycast
+				-- Vérification de l'obstacle si "Traverser les Murs" est désactivé
 				if not Config.ThroughWalls then
-					local origin = Camera.CFrame.Position
-					local direction = (head.Position - origin)
-					local raycastParams = RaycastParams.new()
-					raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, player.Character}
-					raycastParams.FilterType = RaycastType.Exclude
-					local result = workspace:Raycast(origin, direction, raycastParams)
-					if result then
-						isValid = false -- Obstacle détecté
+					local char = LocalPlayer.Character
+					if char and char:FindFirstChild("HumanoidRootPart") then
+						local origin = Camera.CFrame.Position
+						local direction = (head.Position - origin)
+						local raycastParams = RaycastParams.new()
+						raycastParams.FilterDescendantsInstances = {char, player.Character}
+						raycastParams.FilterType = RaycastType.Exclude
+						local result = workspace:Raycast(origin, direction, raycastParams)
+						if result then
+							isValid = false
+						end
 					end
 				end
 				
@@ -426,10 +427,10 @@ RunService.RenderStepped:Connect(function(dt)
 	
 	FOVFrame.Size = UDim2.new(0, Config.FOV * 2, 0, Config.FOV * 2)
 	FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
-	FOVFrame.Visible = Config.Enabled
+	FOVFrame.Visible = true
 
-	CrosshairH.Visible = Config.Enabled and Config.Crosshair
-	CrosshairV.Visible = Config.Enabled and Config.Crosshair
+	CrosshairH.Visible = Config.Crosshair
+	CrosshairV.Visible = Config.Crosshair
 
 	-- Mouvements Joueur
 	local char = LocalPlayer.Character
@@ -476,7 +477,8 @@ RunService.RenderStepped:Connect(function(dt)
 			local pHum = pChar and pChar:FindFirstChildOfClass("Humanoid")
 			local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
 			
-			if Config.Enabled and Config.ESPBoxes and pChar and pHum and pHum.Health > 0 then
+			-- ESP Boîte Vert
+			if Config.ESPBoxes and pChar and pHum and pHum.Health > 0 then
 				if not highlights[player] then
 					local hl = Instance.new("Highlight")
 					hl.FillTransparency = 1
@@ -493,10 +495,9 @@ RunService.RenderStepped:Connect(function(dt)
 				highlights[player].Enabled = false
 			end
 			
-			-- Tracers accrochés exactement aux pieds
+			-- Tracers collés aux pieds
 			local tracer = getTracer(player)
-			if Config.Enabled and Config.Tracers and pChar and pRoot and pHum and pHum.Health > 0 then
-				-- Position 3D au niveau du sol des pieds (-3.2 studs sous le RootPart)
+			if Config.Tracers and pChar and pRoot and pHum and pHum.Health > 0 then
 				local feetPos3D = pRoot.Position - Vector3.new(0, 3.2, 0)
 				local feetScreenPos, onScreen = Camera:WorldToViewportPoint(feetPos3D)
 				
@@ -519,8 +520,8 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- Lock de l'Aim Assist (Maintenir clic droit)
-	if Config.Enabled and Config.AimAssist and isRightMouseDown then
+	-- Aim Lock (Clic droit maintenu)
+	if Config.AimAssist and isRightMouseDown then
 		if not lockedTarget or not lockedTarget.Parent or lockedTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
 			lockedTarget = getClosestTarget()
 		end
