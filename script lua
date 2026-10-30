@@ -14,12 +14,12 @@ local Config = {
 	AimAssist = true,
 	FOV = 150,
 	Smoothness = 6,
-	ThroughWalls = true, -- Traverser les murs activé par défaut
+	ThroughWalls = true, -- Permet de cibler à travers les murs
 	Tracers = true,
 	ESPBoxes = true,
 	Crosshair = true,
 	
-	-- Paramètres Player (Fly, Speed, etc.)
+	-- Options Player
 	InfiniteJump = false,
 	Spin = false,
 	Fly = false,
@@ -35,7 +35,6 @@ local isRightMouseDown = false
 local lockedTarget = nil
 local highlights = {}
 local tracerFrames = {}
-local isFlying = false
 local flyBodyVelocity, flyBodyGyro
 
 -- Son de clic
@@ -70,7 +69,7 @@ CrosshairV.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 CrosshairV.BorderSizePixel = 0
 CrosshairV.Parent = ScreenGui
 
--- Fenêtre principale (Thème Noir & Blanc / UICorner / Contour Blanc Épais)
+-- Fenêtre principale (Noir & Blanc)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 440, 0, 400)
@@ -89,7 +88,7 @@ MainStroke.Color = Color3.fromRGB(240, 240, 240)
 MainStroke.Thickness = 2.5
 MainStroke.Parent = MainFrame
 
--- Barre supérieure (Déplacement)
+-- Barre supérieure
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 42)
 TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
@@ -105,14 +104,14 @@ TitleLabel.Size = UDim2.new(1, -20, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "⚡ YNW // PANEL (PRIVÉ)"
+TitleLabel.Text = "⚡ YNW // PANEL"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 16
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TopBar
 
 -- Déplacement de la fenêtre
-local dragging, dragInput, dragStart, startPos
+local dragging, dragStart, startPos
 TopBar.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = true
@@ -130,7 +129,7 @@ UserInputService.InputEnded:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
 end)
 
--- Barre latérale (Sidebar)
+-- Sidebar
 local Sidebar = Instance.new("Frame")
 Sidebar.Size = UDim2.new(0, 65, 1, -42)
 Sidebar.Position = UDim2.new(0, 0, 0, 42)
@@ -149,7 +148,7 @@ local UICornerSide = Instance.new("UICorner")
 UICornerSide.CornerRadius = UDim.new(0, 12)
 UICornerSide.Parent = Sidebar
 
--- Conteneurs des onglets
+-- Onglets
 local Containers = {}
 
 local function createTabContent(name)
@@ -176,7 +175,6 @@ local aimbotTab = createTabContent("Aimbot")
 local visualTab = createTabContent("Visual")
 local playerTab = createTabContent("Player")
 
--- Création sécurisée des boutons de la Sidebar avec icônes vectorielles intégrées
 local function createSidebarButton(tabContent, iconType)
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(0, 42, 0, 42)
@@ -194,12 +192,11 @@ local function createSidebarButton(tabContent, iconType)
 	stroke.Thickness = 1
 	stroke.Parent = btn
 
-	-- Icône symbolique interne (Garantie sans erreur d'ID)
 	local iconLbl = Instance.new("TextLabel")
 	iconLbl.Size = UDim2.new(1, 0, 1, 0)
 	iconLbl.BackgroundTransparency = 1
 	iconLbl.Font = Enum.Font.GothamBold
-	iconLbl.TextSize = 14
+	iconLbl.TextSize = 13
 	iconLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 	iconLbl.Text = iconType
 	iconLbl.Parent = btn
@@ -216,14 +213,14 @@ createSidebarButton(visualTab, "VIS")
 createSidebarButton(playerTab, "PLY")
 aimbotTab.Visible = true
 
--- Composants d'UI (Toggles et Sliders)
+-- Composants Toggles et Sliders
 local function createToggle(parent, name, defaultState, callback)
 	local container = Instance.new("Frame")
 	container.Size = UDim2.new(1, 0, 0, 32)
 	container.BackgroundTransparency = 1
 	
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(0.65, 0, 1, 0)
+	label.Size = UDim2.new(0, 200, 1, 0)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.Gotham
 	label.Text = name
@@ -276,19 +273,11 @@ local function createSlider(parent, name, min, max, default, callback)
 	sliderBar.BorderSizePixel = 0
 	sliderBar.Parent = container
 	
-	local barCorner = Instance.new("UICorner")
-	barCorner.CornerRadius = UDim.new(1, 0)
-	barCorner.Parent = sliderBar
-	
 	local fill = Instance.new("Frame")
 	fill.Size = UDim2.new((default - min)/(max - min), 0, 1, 0)
 	fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	fill.BorderSizePixel = 0
 	fill.Parent = sliderBar
-	
-	local fillCorner = Instance.new("UICorner")
-	fillCorner.CornerRadius = UDim.new(1, 0)
-	fillCorner.Parent = fill
 	
 	local draggingSlider = false
 	sliderBar.InputBegan:Connect(function(input)
@@ -309,7 +298,7 @@ local function createSlider(parent, name, min, max, default, callback)
 	container.Parent = parent
 end
 
--- Remplissage des onglets
+-- Remplissage des options
 createToggle(aimbotTab, "Activer le Script", Config.Enabled, function(s) Config.Enabled = s end)
 createToggle(aimbotTab, "Aim Lock (Visée)", Config.AimAssist, function(s) Config.AimAssist = s end)
 createToggle(aimbotTab, "Traverser les Murs", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
@@ -331,7 +320,7 @@ createSlider(playerTab, "Vitesse Fly", 1, 100, Config.FlySpeed, function(v) Conf
 createToggle(playerTab, "Activer WalkSpeed", Config.WalkSpeedEnabled, function(s) Config.WalkSpeedEnabled = s end)
 createSlider(playerTab, "Valeur WalkSpeed", 16, 150, Config.WalkSpeedValue, function(v) Config.WalkSpeedValue = v end)
 
--- Cercle FOV visuel
+-- FOV Frame
 local FOVFrame = Instance.new("Frame")
 FOVFrame.BackgroundTransparency = 1
 FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -346,12 +335,12 @@ local FOVCorner = Instance.new("UICorner")
 FOVCorner.CornerRadius = UDim.new(1, 0)
 FOVCorner.Parent = FOVFrame
 
--- Tracers rouge clair transparents
+-- Tracers collés exactement aux pieds
 local function getTracer(player)
 	if not tracerFrames[player] then
 		local line = Instance.new("Frame")
 		line.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
-		line.BackgroundTransparency = 0.4
+		line.BackgroundTransparency = 0.3
 		line.BorderSizePixel = 0
 		line.Size = UDim2.new(0, 1.5, 0, 0)
 		line.Visible = false
@@ -362,17 +351,11 @@ local function getTracer(player)
 end
 
 Players.PlayerRemoving:Connect(function(player)
-	if tracerFrames[player] then
-		tracerFrames[player]:Destroy()
-		tracerFrames[player] = nil
-	end
-	if highlights[player] then
-		highlights[player]:Destroy()
-		highlights[player] = nil
-	end
+	if tracerFrames[player] then tracerFrames[player]:Destroy() tracerFrames[player] = nil end
+	if highlights[player] then highlights[player]:Destroy() highlights[player] = nil end
 end)
 
--- Gestion des touches (Ctrl pour masquer l'interface)
+-- Événements Entrées
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if input.UserInputType == Enum.UserInputType.MouseButton2 then
 		isRightMouseDown = true
@@ -381,9 +364,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	elseif Config.InfiniteJump and input.KeyCode == Enum.KeyCode.Space then
 		local char = LocalPlayer.Character
 		local hrp = char and char:FindFirstChild("HumanoidRootPart")
-		if hrp then
-			hrp.Velocity = Vector3.new(hrp.Velocity.X, 50, hrp.Velocity.Z)
-		end
+		if hrp then hrp.Velocity = Vector3.new(hrp.Velocity.X, 50, hrp.Velocity.Z) end
 	end
 end)
 
@@ -394,7 +375,7 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
--- Fonction de recherche de cible (Traversée des murs corrigée)
+-- Fonction de recherche de cible (Logique Traverser les Murs corrigée)
 local function getClosestTarget()
 	local closestPlayer = nil
 	local shortestDistance = Config.FOV
@@ -408,7 +389,7 @@ local function getClosestTarget()
 			if humanoid and humanoid.Health > 0 and head then
 				local isValid = true
 				
-				-- Si "Traverser les Murs" est désactivé, on vérifie les obstacles
+				-- Seulement si "Traverser les Murs" est DÉSACTIVÉ, on applique le test Raycast
 				if not Config.ThroughWalls then
 					local origin = Camera.CFrame.Position
 					local direction = (head.Position - origin)
@@ -417,10 +398,9 @@ local function getClosestTarget()
 					raycastParams.FilterType = RaycastType.Exclude
 					local result = workspace:Raycast(origin, direction, raycastParams)
 					if result then
-						isValid = false
+						isValid = false -- Obstacle détecté
 					end
 				end
-				-- Si "Traverser les Murs" est activé (Config.ThroughWalls == true), isValid reste true directement.
 				
 				if isValid then
 					local screenPoint, onScreen = Camera:WorldToViewportPoint(head.Position)
@@ -440,36 +420,26 @@ local function getClosestTarget()
 	return closestPlayer
 end
 
--- Boucle de rendu principale (Aimbot, ESP, Tracers, Fly, Speed, Spin)
+-- Boucle principale
 RunService.RenderStepped:Connect(function(dt)
 	local mousePos = UserInputService:GetMouseLocation()
 	
-	-- FOV
 	FOVFrame.Size = UDim2.new(0, Config.FOV * 2, 0, Config.FOV * 2)
 	FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
 	FOVFrame.Visible = Config.Enabled
 
-	-- Crosshair
 	CrosshairH.Visible = Config.Enabled and Config.Crosshair
 	CrosshairV.Visible = Config.Enabled and Config.Crosshair
 
-	-- Logique Joueur (WalkSpeed, Spinbot, Fly)
+	-- Mouvements Joueur
 	local char = LocalPlayer.Character
 	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 
 	if char and humanoid and hrp then
-		-- WalkSpeed
-		if Config.WalkSpeedEnabled then
-			humanoid.WalkSpeed = Config.WalkSpeedValue
-		end
+		if Config.WalkSpeedEnabled then humanoid.WalkSpeed = Config.WalkSpeedValue end
+		if Config.Spin then hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(35), 0) end
 
-		-- Spinbot
-		if Config.Spin then
-			hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(35), 0)
-		end
-
-		-- Fly System
 		if Config.Fly then
 			if not flyBodyVelocity then
 				flyBodyVelocity = Instance.new("BodyVelocity")
@@ -499,14 +469,13 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- ESP et Tracers
+	-- ESP & Tracers
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
 			local pChar = player.Character
 			local pHum = pChar and pChar:FindFirstChildOfClass("Humanoid")
 			local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
 			
-			-- ESP Boîte Vert
 			if Config.Enabled and Config.ESPBoxes and pChar and pHum and pHum.Health > 0 then
 				if not highlights[player] then
 					local hl = Instance.new("Highlight")
@@ -524,13 +493,16 @@ RunService.RenderStepped:Connect(function(dt)
 				highlights[player].Enabled = false
 			end
 			
-			-- Tracers Rouges Clairs
+			-- Tracers accrochés exactement aux pieds
 			local tracer = getTracer(player)
 			if Config.Enabled and Config.Tracers and pChar and pRoot and pHum and pHum.Health > 0 then
-				local rootScreenPos, onScreen = Camera:WorldToViewportPoint(pRoot.Position)
+				-- Position 3D au niveau du sol des pieds (-3.2 studs sous le RootPart)
+				local feetPos3D = pRoot.Position - Vector3.new(0, 3.2, 0)
+				local feetScreenPos, onScreen = Camera:WorldToViewportPoint(feetPos3D)
+				
 				if onScreen then
 					local bottomScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-					local targetScreen = Vector2.new(rootScreenPos.X, rootScreenPos.Y)
+					local targetScreen = Vector2.new(feetScreenPos.X, feetScreenPos.Y)
 					local dist = (targetScreen - bottomScreen).Magnitude
 					
 					tracer.Size = UDim2.new(0, 1.5, 0, dist)
@@ -547,7 +519,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- Aim Lock (Clic droit maintenu)
+	-- Lock de l'Aim Assist (Maintenir clic droit)
 	if Config.Enabled and Config.AimAssist and isRightMouseDown then
 		if not lockedTarget or not lockedTarget.Parent or lockedTarget.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
 			lockedTarget = getClosestTarget()
