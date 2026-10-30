@@ -4,20 +4,20 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local SoundService = game:GetService("SoundService")
+local Lighting = game:GetService("Lighting")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- Paramètres configurables
+-- Paramètres configurables (Tout est désactivé par défaut, activable manuellement)
 local Config = {
-	AimAssist = true,
+	AimAssist = false,
 	FOV = 35, -- Réglable de 1 à 100
 	Smoothness = 6,
-	ThroughWalls = true, -- Traverser les murs et balles traversantes
-	Tracers = true,
-	ESPBoxes = true,
-	Crosshair = true,
-	SelectedTargetPlayer = nil, -- Cible manuelle prioritaire
+	ThroughWalls = false,
+	Tracers = false,
+	ESPBoxes = false,
+	SelectedTargetPlayer = nil,
 	
 	-- Options Player
 	InfiniteJump = false,
@@ -27,12 +27,13 @@ local Config = {
 	WalkSpeedEnabled = false,
 	WalkSpeedValue = 50,
 	
+	-- Options Settings / Anti-Lag
+	AntiLag = false,
+	
 	ToggleGuiKey = Enum.KeyCode.LeftControl
 }
 
 -- État interne
-local isRightMouseDown = false
-local lockedTarget = nil
 local highlights = {}
 local tracerFrames = {}
 local flyBodyVelocity, flyBodyGyro
@@ -51,23 +52,6 @@ ScreenGui.DisplayOrder = 999999
 
 local success, _ = pcall(function() ScreenGui.Parent = CoreGui end)
 if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
-
--- Réticule central (Crosshair)
-local CrosshairH = Instance.new("Frame")
-CrosshairH.Size = UDim2.new(0, 12, 0, 2)
-CrosshairH.AnchorPoint = Vector2.new(0.5, 0.5)
-CrosshairH.Position = UDim2.new(0.5, 0, 0.5, 0)
-CrosshairH.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-CrosshairH.BorderSizePixel = 0
-CrosshairH.Parent = ScreenGui
-
-local CrosshairV = Instance.new("Frame")
-CrosshairV.Size = UDim2.new(0, 2, 0, 12)
-CrosshairV.AnchorPoint = Vector2.new(0.5, 0.5)
-CrosshairV.Position = UDim2.new(0.5, 0, 0.5, 0)
-CrosshairV.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-CrosshairV.BorderSizePixel = 0
-CrosshairV.Parent = ScreenGui
 
 -- Fenêtre principale (Thème Noir & Blanc épuré)
 local MainFrame = Instance.new("Frame")
@@ -104,7 +88,7 @@ TitleLabel.Size = UDim2.new(1, -20, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "⚡ YNW // PANEL (PRIVÉ)"
+TitleLabel.Text = "⚡ YNW // RIVALS PANEL"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.TextSize = 16
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -140,7 +124,7 @@ Sidebar.Parent = MainFrame
 local UIListSidebar = Instance.new("UIListLayout")
 UIListSidebar.HorizontalAlignment = Enum.HorizontalAlignment.Center
 UIListSidebar.VerticalAlignment = Enum.VerticalAlignment.Top
-UIListSidebar.Padding = UDim.new(0, 15)
+UIListSidebar.Padding = UDim.new(0, 12)
 UIListSidebar.SortOrder = Enum.SortOrder.LayoutOrder
 UIListSidebar.Parent = Sidebar
 
@@ -174,10 +158,11 @@ end
 local aimbotTab = createTabContent("Aimbot")
 local visualTab = createTabContent("Visual")
 local playerTab = createTabContent("Player")
+local settingsTab = createTabContent("Settings")
 
 local function createSidebarButton(tabContent, iconType)
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 42, 0, 42)
+	btn.Size = UDim2.new(0, 42, 0, 38)
 	btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	btn.Text = ""
 	btn.AutoButtonColor = false
@@ -196,7 +181,7 @@ local function createSidebarButton(tabContent, iconType)
 	iconLbl.Size = UDim2.new(1, 0, 1, 0)
 	iconLbl.BackgroundTransparency = 1
 	iconLbl.Font = Enum.Font.GothamBold
-	iconLbl.TextSize = 13
+	iconLbl.TextSize = 11
 	iconLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 	iconLbl.Text = iconType
 	iconLbl.Parent = btn
@@ -211,6 +196,7 @@ end
 createSidebarButton(aimbotTab, "AIM")
 createSidebarButton(visualTab, "VIS")
 createSidebarButton(playerTab, "PLY")
+createSidebarButton(settingsTab, "SET")
 aimbotTab.Visible = true
 
 -- Composants Toggles et Sliders
@@ -299,12 +285,12 @@ local function createSlider(parent, name, min, max, default, callback)
 end
 
 -- Configuration AIM
-createToggle(aimbotTab, "Aim Lock (Visée)", Config.AimAssist, function(s) Config.AimAssist = s end)
+createToggle(aimbotTab, "Aimbot Auto (FOV)", Config.AimAssist, function(s) Config.AimAssist = s end)
 createToggle(aimbotTab, "Traverser les Murs & Balles", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
 createSlider(aimbotTab, "Taille FOV", 1, 100, Config.FOV, function(v) Config.FOV = v end)
 createSlider(aimbotTab, "Smoothness (Vitesse)", 1, 20, Config.Smoothness, function(v) Config.Smoothness = v end)
 
--- Liste des joueurs pour ciblage manuel
+-- Liste des joueurs optimisée pour Rivals
 local targetSelectorContainer = Instance.new("Frame")
 targetSelectorContainer.Size = UDim2.new(1, 0, 0, 130)
 targetSelectorContainer.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
@@ -320,7 +306,7 @@ tsTitle.Size = UDim2.new(1, 0, 0, 25)
 tsTitle.Position = UDim2.new(0, 10, 0, 5)
 tsTitle.BackgroundTransparency = 1
 tsTitle.Font = Enum.Font.GothamBold
-tsTitle.Text = "Ciblage Manuel (Serveur)"
+tsTitle.Text = "Ciblage Manuel (Rivals / Serveur)"
 tsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 tsTitle.TextSize = 12
 tsTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -383,11 +369,6 @@ updatePlayerListUI()
 -- Options VISUAL
 createToggle(visualTab, "ESP Boîte Vert", Config.ESPBoxes, function(s) Config.ESPBoxes = s end)
 createToggle(visualTab, "Tracers Rouges Clairs", Config.Tracers, function(s) Config.Tracers = s end)
-createToggle(visualTab, "Crosshair Central", Config.Crosshair, function(s) 
-	Config.Crosshair = s 
-	CrosshairH.Visible = s
-	CrosshairV.Visible = s
-end)
 
 -- Options PLAYER
 createToggle(playerTab, "Infinite Jump", Config.InfiniteJump, function(s) Config.InfiniteJump = s end)
@@ -397,7 +378,27 @@ createSlider(playerTab, "Vitesse Fly", 1, 100, Config.FlySpeed, function(v) Conf
 createToggle(playerTab, "Activer WalkSpeed", Config.WalkSpeedEnabled, function(s) Config.WalkSpeedEnabled = s end)
 createSlider(playerTab, "Valeur WalkSpeed", 16, 150, Config.WalkSpeedValue, function(v) Config.WalkSpeedValue = v end)
 
--- Cercle FOV Précis
+-- Options SETTINGS (Anti-Lag / Optimisation graphique)
+createToggle(settingsTab, "Anti-Lag & FPS Boost", Config.AntiLag, function(s)
+	Config.AntiLag = s
+	if s then
+		pcall(function()
+			settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+			Lighting.GlobalShadows = false
+			Lighting.Brightness = 2
+			for _, v in ipairs(workspace:GetDescendants()) do
+				if v:IsA("BasePart") then
+					v.Material = Enum.Material.SmoothPlastic
+					v.Reflectance = 0
+				elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+					v.Enabled = false
+				end
+			end
+		end)
+	end
+end)
+
+-- Cercle FOV Connecté et Réglable de 1 à 100
 local FOVFrame = Instance.new("Frame")
 FOVFrame.BackgroundTransparency = 1
 FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -412,16 +413,19 @@ local FOVCorner = Instance.new("UICorner")
 FOVCorner.CornerRadius = UDim.new(1, 0)
 FOVCorner.Parent = FOVFrame
 
--- Helper universel pour trouver la tête ou la pièce principale
+-- Détection universelle adaptée à Rivals (cherche dans workspace ou les dossiers personnalisés de personnages)
 local function getTargetPart(character)
 	if not character then return nil end
-	local priorityParts = {"Head", "HeadHitbox", "Hitbox", "HumanoidRootPart", "UpperTorso", "Torso"}
-	for _, name in ipairs(priorityParts) do
+	
+	-- Recherche ciblée pour Rivals
+	local priorityNames = {"Head", "HeadHitbox", "Hitbox", "HumanoidRootPart", "UpperTorso", "Torso", "HumanoidRootPart"}
+	for _, name in ipairs(priorityNames) do
 		local part = character:FindFirstChild(name, true)
 		if part and part:IsA("BasePart") then
 			return part
 		end
 	end
+	
 	for _, child in ipairs(character:GetChildren()) do
 		if child:IsA("BasePart") then return child end
 	end
@@ -449,9 +453,7 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then
-		isRightMouseDown = true
-	elseif input.KeyCode == Config.ToggleGuiKey then
+	if input.KeyCode == Config.ToggleGuiKey then
 		MainFrame.Visible = not MainFrame.Visible
 	elseif Config.InfiniteJump and input.KeyCode == Enum.KeyCode.Space then
 		local char = LocalPlayer.Character
@@ -460,14 +462,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
-UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton2 then
-		isRightMouseDown = false
-		lockedTarget = nil
-	end
-end)
-
--- Recherche de cible ultra-précise et collée à un seul joueur
+-- Recherche de la cible la plus proche dans la FOV (ou sélection manuelle prioritaire)
 local function getClosestTarget()
 	if Config.SelectedTargetPlayer and Config.SelectedTargetPlayer.Character then
 		local targetPart = getTargetPart(Config.SelectedTargetPlayer.Character)
@@ -475,7 +470,7 @@ local function getClosestTarget()
 	end
 
 	local closestPart = nil
-	local fovRadius = Config.FOV * 3.5
+	local fovRadius = Config.FOV * 4 -- Précision accrue de la FOV (1 à 100)
 	local shortestDistance = fovRadius
 	local mousePos = UserInputService:GetMouseLocation()
 
@@ -514,30 +509,30 @@ local function getClosestTarget()
 	return closestPart
 end
 
--- Hook pour les balles et tirs à travers les murs / portée infinie
+-- Hook pour les balles et portée infinie traversant les murs sur Rivals
 pcall(function()
 	if hookfunction and rawget(workspace, "Raycast") then
 		local oldRaycast
 		oldRaycast = hookfunction(workspace.Raycast, function(self, origin, direction, params)
-			if Config.ThroughWalls and lockedTarget and isRightMouseDown then
-				direction = (lockedTarget.Position - origin).Unit * 10000
+			if Config.ThroughWalls and Config.AimAssist then
+				local currentTarget = getClosestTarget()
+				if currentTarget then
+					direction = (currentTarget.Position - origin).Unit * 10000
+				end
 			end
 			return oldRaycast(self, origin, direction, params)
 		end)
 	end
 end)
 
--- Boucle de rendu principale
+-- Boucle de rendu principale (Suivi FOV, Aimbot automatique sans clic, ESP, Mouvements)
 RunService.RenderStepped:Connect(function(dt)
 	local mousePos = UserInputService:GetMouseLocation()
-	local currentFOVSize = Config.FOV * 3.5
+	local currentFOVSize = Config.FOV * 4
 	
 	FOVFrame.Size = UDim2.new(0, currentFOVSize * 2, 0, currentFOVSize * 2)
 	FOVFrame.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y)
-	FOVFrame.Visible = true
-
-	CrosshairH.Visible = Config.Crosshair
-	CrosshairV.Visible = Config.Crosshair
+	FOVFrame.Visible = Config.AimAssist
 
 	-- Mouvements Joueur
 	local char = LocalPlayer.Character
@@ -575,7 +570,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- ESP & Tracers sécurisés (anti-bug de verrouillage de Highlight)
+	-- ESP & Tracers
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
 			local pChar = player.Character
@@ -624,18 +619,13 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- Aim Lock strict (Reste bloqué sur une seule cible tant que le clic droit est maintenu)
-	if Config.AimAssist and isRightMouseDown then
-		if not lockedTarget or not lockedTarget.Parent then
-			lockedTarget = getClosestTarget()
-		end
-
-		if lockedTarget then
-			local targetCFrame = CFrame.new(Camera.CFrame.Position, lockedTarget.Position)
+	-- Aimbot automatique (Suivi immédiat dès qu'un joueur entre dans la FOV sans avoir besoin de viser)
+	if Config.AimAssist then
+		local currentTarget = getClosestTarget()
+		if currentTarget then
+			local targetCFrame = CFrame.new(Camera.CFrame.Position, currentTarget.Position)
 			local alpha = math.clamp(dt * (22 - Config.Smoothness), 0.05, 1)
 			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
 		end
-	else
-		lockedTarget = nil
 	end
 end)
