@@ -14,7 +14,7 @@ local Config = {
 	AimAssist = false,
 	NearestPlayer = false,
 	FOV = 70,
-	Smoothness = 4, -- Plus fluide pour éviter les saccades
+	Smoothness = 4,
 	ThroughWalls = false,
 	Tracers = false,
 	ESPBoxes = false,
@@ -39,6 +39,7 @@ local highlights = {}
 local tracerFrames = {}
 local flyBodyVelocity, flyBodyGyro
 local currentLockedTargetPart = nil
+local toggleButtonCallbacks = {} -- Pour mettre à jour l'UI dynamiquement via les touches
 
 -- Son de clic
 local ClickSound = Instance.new("Sound")
@@ -90,9 +91,9 @@ TitleLabel.Size = UDim2.new(1, -20, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "⚡ YNW // RIVALS PANEL (FLUIDE & CORRIGÉ)"
+TitleLabel.Text = "⚡ YNW // RIVALS PANEL (KEYBINDS & WEAPON FIX)"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 13
+TitleLabel.TextSize = 12
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TopBar
 
@@ -202,7 +203,7 @@ createSidebarButton(settingsTab, "SET")
 aimbotTab.Visible = true
 
 -- Composants Toggles et Sliders
-local function createToggle(parent, name, defaultState, callback)
+local function createToggle(parent, name, defaultState, configKey, callback)
 	local container = Instance.new("Frame")
 	container.Size = UDim2.new(1, 0, 0, 32)
 	container.BackgroundTransparency = 1
@@ -229,13 +230,29 @@ local function createToggle(parent, name, defaultState, callback)
 	btnCorner.CornerRadius = UDim.new(0, 6)
 	btnCorner.Parent = button
 
-	local state = defaultState
+	local function setState(newState)
+		button.BackgroundColor3 = newState and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(45, 45, 45)
+		callback(newState)
+	end
+
 	button.MouseButton1Click:Connect(function()
-		state = not state
 		pcall(function() ClickSound:Play() end)
-		button.BackgroundColor3 = state and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(45, 45, 45)
-		callback(state)
+		if configKey == "AimAssist" then
+			Config.AimAssist = not Config.AimAssist
+			setState(Config.AimAssist)
+		elseif configKey == "NearestPlayer" then
+			Config.NearestPlayer = not Config.NearestPlayer
+			setState(Config.NearestPlayer)
+		elseif configKey == "ESPBoxes" then
+			Config.ESPBoxes = not Config.ESPBoxes
+			setState(Config.ESPBoxes)
+		end
 	end)
+
+	if configKey then
+		toggleButtonCallbacks[configKey] = setState
+	end
+
 	container.Parent = parent
 end
 
@@ -286,13 +303,13 @@ local function createSlider(parent, name, min, max, default, callback)
 	container.Parent = parent
 end
 
--- Configuration AIM
-createToggle(aimbotTab, "Aimbot Auto (FOV)", Config.AimAssist, function(s) 
+-- Configuration AIM avec clés assignées (T pour Aimbot, U pour Nearest Player)
+createToggle(aimbotTab, "Aimbot Auto [T]", Config.AimAssist, "AimAssist", function(s) 
 	Config.AimAssist = s 
 	if not s then currentLockedTargetPart = nil end
 end)
-createToggle(aimbotTab, "Nearest Player", Config.NearestPlayer, function(s) Config.NearestPlayer = s end)
-createToggle(aimbotTab, "Traverser les Murs & Balles", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
+createToggle(aimbotTab, "Nearest Player [U]", Config.NearestPlayer, "NearestPlayer", function(s) Config.NearestPlayer = s end)
+createToggle(aimbotTab, "Traverser les Murs & Balles", Config.ThroughWalls, nil, function(s) Config.ThroughWalls = s end)
 createSlider(aimbotTab, "Taille FOV", 1, 200, Config.FOV, function(v) Config.FOV = v end)
 createSlider(aimbotTab, "Smoothness (Vitesse)", 1, 20, Config.Smoothness, function(v) Config.Smoothness = v end)
 
@@ -374,20 +391,20 @@ Players.PlayerAdded:Connect(updatePlayerListUI)
 Players.PlayerRemoving:Connect(updatePlayerListUI)
 updatePlayerListUI()
 
--- Options VISUAL
-createToggle(visualTab, "ESP Boîte Vert", Config.ESPBoxes, function(s) Config.ESPBoxes = s end)
-createToggle(visualTab, "Tracers Rouges Clairs", Config.Tracers, function(s) Config.Tracers = s end)
+-- Options VISUAL avec touche P pour l'ESP Boîte Vert
+createToggle(visualTab, "ESP Boîte Vert [P]", Config.ESPBoxes, "ESPBoxes", function(s) Config.ESPBoxes = s end)
+createToggle(visualTab, "Tracers Rouges Clairs", Config.Tracers, nil, function(s) Config.Tracers = s end)
 
 -- Options PLAYER
-createToggle(playerTab, "Infinite Jump", Config.InfiniteJump, function(s) Config.InfiniteJump = s end)
-createToggle(playerTab, "Spinbot (Tourne)", Config.Spin, function(s) Config.Spin = s end)
-createToggle(playerTab, "Fly (Vol)", Config.Fly, function(s) Config.Fly = s end)
+createToggle(playerTab, "Infinite Jump", Config.InfiniteJump, nil, function(s) Config.InfiniteJump = s end)
+createToggle(playerTab, "Spinbot (Tourne)", Config.Spin, nil, function(s) Config.Spin = s end)
+createToggle(playerTab, "Fly (Vol)", Config.Fly, nil, function(s) Config.Fly = s end)
 createSlider(playerTab, "Vitesse Fly", 1, 100, Config.FlySpeed, function(v) Config.FlySpeed = v end)
-createToggle(playerTab, "Activer WalkSpeed", Config.WalkSpeedEnabled, function(s) Config.WalkSpeedEnabled = s end)
+createToggle(playerTab, "Activer WalkSpeed", Config.WalkSpeedEnabled, nil, function(s) Config.WalkSpeedEnabled = s end)
 createSlider(playerTab, "Valeur WalkSpeed", 16, 150, Config.WalkSpeedValue, function(v) Config.WalkSpeedValue = v end)
 
 -- Options SETTINGS (Anti-Lag / SmoothPlastic)
-createToggle(settingsTab, "Anti-Lag & FPS Boost (SmoothPlastic)", Config.AntiLag, function(s)
+createToggle(settingsTab, "Anti-Lag & FPS Boost (SmoothPlastic)", Config.AntiLag, nil, function(s)
 	Config.AntiLag = s
 	if s then
 		pcall(function()
@@ -421,7 +438,7 @@ local FOVCorner = Instance.new("UICorner")
 FOVCorner.CornerRadius = UDim.new(1, 0)
 FOVCorner.Parent = FOVFrame
 
--- Helper universel corps complet (Centre du joueur pour ne rater aucune balle)
+-- Helper universel corps complet
 local function getBodyPart(character)
 	if not character then return nil end
 	local bodyParts = {"HumanoidRootPart", "UpperTorso", "Torso", "Head", "HeadHitbox", "Hitbox"}
@@ -458,15 +475,42 @@ Players.PlayerRemoving:Connect(function(player)
 	end
 end)
 
+-- Gestion des touches de raccourci clavier (T, U, P, H)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
 	if input.KeyCode == Config.ToggleGuiKey then
 		MainFrame.Visible = not MainFrame.Visible
+	elseif input.KeyCode == Enum.KeyCode.T then
+		Config.AimAssist = not Config.AimAssist
+		if not Config.AimAssist then currentLockedTargetPart = nil end
+		if toggleButtonCallbacks["AimAssist"] then toggleButtonCallbacks["AimAssist"](Config.AimAssist) end
+	elseif input.KeyCode == Enum.KeyCode.U then
+		Config.NearestPlayer = not Config.NearestPlayer
+		if toggleButtonCallbacks["NearestPlayer"] then toggleButtonCallbacks["NearestPlayer"](Config.NearestPlayer) end
+	elseif input.KeyCode == Enum.KeyCode.P then
+		Config.ESPBoxes = not Config.ESPBoxes
+		if toggleButtonCallbacks["ESPBoxes"] then toggleButtonCallbacks["ESPBoxes"](Config.ESPBoxes) end
 	elseif Config.InfiniteJump and input.KeyCode == Enum.KeyCode.Space then
 		local char = LocalPlayer.Character
 		local hrp = getBodyPart(char)
 		if hrp then hrp.Velocity = Vector3.new(hrp.Velocity.X, 50, hrp.Velocity.Z) end
 	end
 end)
+
+-- Adaptation dynamique de la vitesse (Smoothness) selon l'arme (Fusil d'assaut vs Pistolet)
+local function getAdaptiveSmoothness()
+	local char = LocalPlayer.Character
+	local tool = char and char:FindFirstChildOfClass("Tool")
+	if tool then
+		local name = tool.Name:lower()
+		-- Si c'est un fusil d'assaut, SMG ou arme rapide, on augmente la réactivité (smoothness plus bas)
+		if name:find("assault") or name:find("rifle") or name:find("smg") or name:find("minigun") or name:find("carbine") then
+			return math.max(1, Config.Smoothness - 2)
+		end
+	end
+	return Config.Smoothness
+end
 
 -- Fonction de recherche de cible fluide et précise sur tout le corps
 local function getClosestTarget()
@@ -478,7 +522,7 @@ local function getClosestTarget()
 	local localChar = LocalPlayer.Character
 	local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
 
-	-- Option Nearest Player : cible automatiquement le joueur le plus proche de toi (même AFK)
+	-- Option Nearest Player (Touche U) : cible automatiquement le joueur le plus proche de toi en 3D
 	if Config.NearestPlayer and localHrp then
 		local nearestPart = nil
 		local shortestDist3D = math.huge
@@ -571,7 +615,7 @@ pcall(function()
 	if hookfunction and rawget(workspace, "Raycast") then
 		local oldRaycast
 		oldRaycast = hookfunction(workspace.Raycast, function(self, origin, direction, params)
-			if Config.ThroughWalls and Config.AimAssist then
+			if Config.ThroughWalls and (Config.AimAssist or Config.NearestPlayer) then
 				local currentTarget = getClosestTarget()
 				if currentTarget then
 					direction = (currentTarget.Position - origin).Unit * 10000
@@ -674,12 +718,13 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- Aimbot automatique ultra fluide et précis sur le corps
-	if Config.AimAssist then
+	-- Aimbot automatique ou Nearest Player (Fluide et adapté à l'arme active)
+	if Config.AimAssist or Config.NearestPlayer then
 		local currentTarget = getClosestTarget()
 		if currentTarget then
 			local targetCFrame = CFrame.new(Camera.CFrame.Position, currentTarget.Position)
-			local alpha = math.clamp(dt * (28 - Config.Smoothness), 0.15, 1)
+			local effectiveSmoothness = getAdaptiveSmoothness()
+			local alpha = math.clamp(dt * (30 - effectiveSmoothness), 0.2, 1)
 			Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, alpha)
 		end
 	end
