@@ -12,6 +12,7 @@ local Camera = workspace.CurrentCamera
 -- Paramètres configurables
 local Config = {
 	AimAssist = false,
+	NearestPlayer = false, -- Nouvelle fonction : cible le plus proche de toi
 	FOV = 70,
 	Smoothness = 5,
 	ThroughWalls = false,
@@ -30,14 +31,14 @@ local Config = {
 	-- Settings / Anti-Lag
 	AntiLag = false,
 	
-	ToggleGuiKey = Enum.KeyCode.H -- Touche H
+	ToggleGuiKey = Enum.KeyCode.H
 }
 
 -- État interne
 local highlights = {}
 local tracerFrames = {}
 local flyBodyVelocity, flyBodyGyro
-local currentLockedTargetPart = nil -- Variable de verrouillage continu
+local currentLockedTargetPart = nil
 
 -- Son de clic
 local ClickSound = Instance.new("Sound")
@@ -89,9 +90,9 @@ TitleLabel.Size = UDim2.new(1, -20, 1, 0)
 TitleLabel.Position = UDim2.new(0, 15, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "⚡ YNW // RIVALS PANEL (LOCK FIX)"
+TitleLabel.Text = "⚡ YNW // RIVALS PANEL (HEADLOCK & NEAREST)"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 15
+TitleLabel.TextSize = 13
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Parent = TopBar
 
@@ -290,6 +291,7 @@ createToggle(aimbotTab, "Aimbot Auto (FOV)", Config.AimAssist, function(s)
 	Config.AimAssist = s 
 	if not s then currentLockedTargetPart = nil end
 end)
+createToggle(aimbotTab, "Nearest Player (Le + proche)", Config.NearestPlayer, function(s) Config.NearestPlayer = s end)
 createToggle(aimbotTab, "Traverser les Murs & Balles", Config.ThroughWalls, function(s) Config.ThroughWalls = s end)
 createSlider(aimbotTab, "Taille FOV", 1, 200, Config.FOV, function(v) Config.FOV = v end)
 createSlider(aimbotTab, "Smoothness (Vitesse)", 1, 20, Config.Smoothness, function(v) Config.Smoothness = v end)
@@ -419,17 +421,17 @@ local FOVCorner = Instance.new("UICorner")
 FOVCorner.CornerRadius = UDim.new(1, 0)
 FOVCorner.Parent = FOVFrame
 
--- Helper universel Rivals
-local function getTargetPart(character)
+-- Helper strictement orienté sur la TÊTE (Headlock)
+local function getHeadPart(character)
 	if not character then return nil end
-	local priorityNames = {"Head", "HeadHitbox", "Hitbox", "HumanoidRootPart", "UpperTorso", "Torso"}
-	for _, name in ipairs(priorityNames) do
+	local headNames = {"Head", "HeadHitbox", "Hitbox"}
+	for _, name in ipairs(headNames) do
 		local part = character:FindFirstChild(name, true)
 		if part and part:IsA("BasePart") then return part end
 	end
-	for _, child in ipairs(character:GetChildren()) do
-		if child:IsA("BasePart") then return child end
-	end
+	-- Fallback si la tête n'est pas trouvée
+	local fallback = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+	if fallback and fallback:IsA("BasePart") then return fallback end
 	return nil
 end
 
@@ -461,33 +463,68 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		MainFrame.Visible = not MainFrame.Visible
 	elseif Config.InfiniteJump and input.KeyCode == Enum.KeyCode.Space then
 		local char = LocalPlayer.Character
-		local hrp = getTargetPart(char)
+		local hrp = getHeadPart(char)
 		if hrp then hrp.Velocity = Vector3.new(hrp.Velocity.X, 50, hrp.Velocity.Z) end
 	end
 end)
 
--- Recherche de cible avec maintien du verrouillage continu (Aim Lock absolu)
+-- Fonction de recherche de cible (Gère Nearest Player ou FOV strict sur la tête)
 local function getClosestTarget()
 	-- 1. Si une cible manuelle est sélectionnée
 	if Config.SelectedTargetPlayer and Config.SelectedTargetPlayer.Character then
-		local targetPart = getTargetPart(Config.SelectedTargetPlayer.Character)
+		local targetPart = getHeadPart(Config.SelectedTargetPlayer.Character)
 		if targetPart then return targetPart end
 	end
 
-	-- 2. Verrouillage continu : si la cible actuelle est toujours valide et visible dans le monde
+	local localChar = LocalPlayer.Character
+	local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
+
+	-- 2. Option "Nearest Player" : vise automatiquement le joueur le plus proche de toi (même AFK ou sur le côté)
+	if Config.NearestPlayer and localHrp then
+		local nearestPart = nil
+		local shortestDist3D = math.huge
+		
+		for _, player in ipairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer and player.Character then
+				local pPart = getHeadPart(player.Character)
+				if pPart then
+					local isValid = true
+					if not Config.ThroughWalls then
+						local origin = Camera.CFrame.Position
+						local direction = (pPart.Position - origin)
+						local raycastParams = RaycastParams.new()
+						raycastParams.FilterDescendantsInstances = {localChar, player.Character}
+						raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+						local result = workspace:Raycast(origin, direction, raycastParams)
+						if result then isValid = false end
+					end
+					
+					if isValid then
+						local dist3D = (pPart.Position - localHrp.Position).Magnitude
+						if dist3D < shortestDist3D then
+							shortestDist3D = dist3D
+							nearestPart = pPart
+						end
+					end
+				end
+			end
+		end
+		if nearestPart then return nearestPart end
+	end
+
+	-- 3. Verrouillage continu sur la tête si déjà actif dans la FOV
 	if currentLockedTargetPart and currentLockedTargetPart.Parent and currentLockedTargetPart:IsDescendantOf(workspace) then
 		local screenPoint, onScreen = Camera:WorldToViewportPoint(currentLockedTargetPart.Position)
 		local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 		local fovRadius = Config.FOV * 3.5
 		local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - screenCenter).Magnitude
 		
-		-- Reste verrouillé même si la caméra bouge, tant que le joueur est encore proche de la FOV
 		if onScreen and distance <= (fovRadius * 1.5) then
 			return currentLockedTargetPart
 		end
 	end
 
-	-- 3. Sinon, cherche un nouveau joueur le plus proche du centre du crosshair
+	-- 4. Recherche standard par FOV centré sur le réticule de Rivals (visée sur la tête)
 	local closestPart = nil
 	local fovRadius = Config.FOV * 3
 	local shortestDistance = fovRadius
@@ -495,7 +532,7 @@ local function getClosestTarget()
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer and player.Character then
-			local targetPart = getTargetPart(player.Character)
+			local targetPart = getHeadPart(player.Character)
 			
 			if targetPart then
 				local isValid = true
@@ -530,7 +567,7 @@ local function getClosestTarget()
 	return closestPart
 end
 
--- Hook pour les tirs traversant les murs et portée infinie
+-- Hook pour les tirs traversant les murs et portée infinie sur les têtes
 pcall(function()
 	if hookfunction and rawget(workspace, "Raycast") then
 		local oldRaycast
@@ -551,12 +588,12 @@ RunService.RenderStepped:Connect(function(dt)
 	-- Cercle de FOV ancré au centre exact de l'écran (Crosshair Rivals)
 	FOVFrame.Size = UDim2.new(0, Config.FOV * 6, 0, Config.FOV * 6)
 	FOVFrame.Position = UDim2.new(0, Camera.ViewportSize.X / 2, 0, Camera.ViewportSize.Y / 2)
-	FOVFrame.Visible = Config.AimAssist
+	FOVFrame.Visible = Config.AimAssist and not Config.NearestPlayer
 
 	-- Mouvements Joueur
 	local char = LocalPlayer.Character
 	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-	local hrp = getTargetPart(char)
+	local hrp = getHeadPart(char)
 
 	if char and hrp then
 		if humanoid and Config.WalkSpeedEnabled then humanoid.WalkSpeed = Config.WalkSpeedValue end
@@ -589,11 +626,11 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- ESP & Tracers
+	-- ESP & Tracers (pointés sur la tête)
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LocalPlayer then
 			local pChar = player.Character
-			local pPart = getTargetPart(pChar)
+			local pPart = getHeadPart(pChar)
 			
 			if Config.ESPBoxes and pChar then
 				if not highlights[player] or highlights[player].Parent ~= pChar then
@@ -617,7 +654,7 @@ RunService.RenderStepped:Connect(function(dt)
 			
 			local tracer = getTracer(player)
 			if Config.Tracers and pChar and pPart then
-				local partScreenPos, onScreen = Camera:WorldToViewportPoint(pPart.Position - Vector3.new(0, 2, 0))
+				local partScreenPos, onScreen = Camera:WorldToViewportPoint(pPart.Position)
 				
 				if onScreen then
 					local bottomScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
@@ -638,7 +675,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- Aimbot continu : verrouillage de la caméra sans décrocher
+	-- Aimbot automatique sur la tête
 	if Config.AimAssist then
 		local currentTarget = getClosestTarget()
 		if currentTarget then
